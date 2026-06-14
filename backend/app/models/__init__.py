@@ -1,0 +1,491 @@
+"""SQLAlchemy ORM models for WorkshopIQ."""
+from datetime import datetime, timezone
+from enum import Enum
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.database import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class UserRole(str, Enum):
+    administrator = "administrator"
+    staff = "staff"
+    client = "client"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(20), default=UserRole.staff.value)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    job_access: Mapped[list["ClientJobAccess"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class Setting(Base):
+    """Simple key/value store for application settings."""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_number: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    sequence: Mapped[int] = mapped_column(Integer, index=True)
+
+    customer_name: Mapped[str] = mapped_column(String(255))
+    contact_person: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    po_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    date_received: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    component_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="Received", index=True)
+
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    photos: Mapped[list["Photo"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
+    notes: Mapped[list["Note"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
+    timeline: Mapped[list["TimelineEvent"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
+    inspections: Mapped[list["Inspection"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
+    client_access: Mapped[list["ClientJobAccess"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
+    checkins: Mapped[list["JobCheckin"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
+    review: Mapped["JobReview | None"] = relationship(
+        back_populates="job", cascade="all, delete-orphan", uselist=False
+    )
+    final_inspection: Mapped["FinalInspection | None"] = relationship(
+        back_populates="job", cascade="all, delete-orphan", uselist=False
+    )
+    ncrs: Mapped[list["NCR"]] = relationship(
+        back_populates="job", passive_deletes=True
+    )
+
+
+class ClientJobAccess(Base):
+    __tablename__ = "client_job_access"
+    __table_args__ = (UniqueConstraint("user_id", "job_id", name="uq_client_job"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
+
+    user: Mapped["User"] = relationship(back_populates="job_access")
+    job: Mapped["Job"] = relationship(back_populates="client_access")
+
+
+class JobCheckin(Base):
+    """One-time QR check-in token for a job.
+
+    A token is created per job. Scanning the QR opens a public form; only on
+    submit is the check-in recorded (operator + machine) and the token locked.
+    """
+
+    __tablename__ = "job_checkins"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), index=True
+    )
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+
+    checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
+    operator_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    machine: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    scanner_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    checked_in_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    job: Mapped["Job"] = relationship(back_populates="checkins")
+
+
+class Photo(Base):
+    __tablename__ = "photos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
+    filename: Mapped[str] = mapped_column(String(255))
+    original_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    category: Mapped[str] = mapped_column(String(20), default="general")  # before/after/general
+    caption: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    inspection_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inspection_items.id", ondelete="SET NULL"), nullable=True
+    )
+    uploaded_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    job: Mapped["Job"] = relationship(back_populates="photos")
+
+
+class Document(Base):
+    __tablename__ = "documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
+    filename: Mapped[str] = mapped_column(String(255))
+    original_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    uploaded_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    job: Mapped["Job"] = relationship(back_populates="documents")
+
+
+class Note(Base):
+    __tablename__ = "notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
+    note_type: Mapped[str] = mapped_column(String(30), default="internal")
+    # internal / customer / query / progress / action
+    body: Mapped[str] = mapped_column(Text)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    author_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    job: Mapped["Job"] = relationship(back_populates="notes")
+
+
+class TimelineEvent(Base):
+    __tablename__ = "timeline_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
+    event_type: Mapped[str] = mapped_column(String(40))  # created / status_change / note / photo / inspection
+    description: Mapped[str] = mapped_column(Text)
+    actor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    job: Mapped["Job"] = relationship(back_populates="timeline")
+
+
+class InspectionTemplate(Base):
+    __tablename__ = "inspection_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    component_type: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    items: Mapped[list["TemplateItem"]] = relationship(
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="TemplateItem.order_index",
+    )
+
+
+class TemplateItem(Base):
+    __tablename__ = "template_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("inspection_templates.id", ondelete="CASCADE")
+    )
+    label: Mapped[str] = mapped_column(String(255))
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+
+    template: Mapped["InspectionTemplate"] = relationship(back_populates="items")
+
+
+class Inspection(Base):
+    __tablename__ = "inspections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
+    component_type: Mapped[str] = mapped_column(String(80))
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    inspector_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    inspector_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    job: Mapped["Job"] = relationship(back_populates="inspections")
+    items: Mapped[list["InspectionItem"]] = relationship(
+        back_populates="inspection",
+        cascade="all, delete-orphan",
+        order_by="InspectionItem.order_index",
+    )
+
+
+class InspectionItem(Base):
+    __tablename__ = "inspection_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    inspection_id: Mapped[int] = mapped_column(
+        ForeignKey("inspections.id", ondelete="CASCADE")
+    )
+    label: Mapped[str] = mapped_column(String(255))
+    result: Mapped[str | None] = mapped_column(String(10), nullable=True)  # pass/fail/na
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+
+    inspection: Mapped["Inspection"] = relationship(back_populates="items")
+
+
+class JobReview(Base):
+    """Customer satisfaction review for a job.
+
+    One review request per job. Staff/admin request it; the assigned client
+    fills in a 1-5 star rating plus free-text feedback. While ``completed`` is
+    False the assigned client is nagged on every login; submitting flips it to
+    True and the nag stops.
+    """
+
+    __tablename__ = "job_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), unique=True, index=True
+    )
+
+    requested_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+    completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1-5
+    feedback: Mapped[str | None] = mapped_column(Text, nullable=True)  # what they liked
+    improvement: Mapped[str | None] = mapped_column(Text, nullable=True)  # how to improve
+
+    reviewer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    reviewer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    job: Mapped["Job"] = relationship(back_populates="review")
+
+
+class ReviewSeen(Base):
+    """Tracks which staff/admin users have seen the 'review submitted' notice.
+
+    The client nag is derived from completion state, but the staff/admin notice
+    is a one-time-per-user alert: each user sees that a review came in exactly
+    once (their first login after it), tracked independently per user.
+    """
+
+    __tablename__ = "review_notification_seen"
+    __table_args__ = (
+        UniqueConstraint("user_id", "review_id", name="uq_review_seen"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    review_id: Mapped[int] = mapped_column(
+        ForeignKey("job_reviews.id", ondelete="CASCADE"), index=True
+    )
+    seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class FinalInspection(Base):
+    """Client-completed final sign-off for a job.
+
+    One per job. Staff/admin "submit" (release) it, which moves the job into
+    the Inspection stage and makes the form available to the assigned client.
+    The client fills in the inspector's name (and an optional internal
+    reference) and submits, marking it complete. A customer review can only be
+    requested once this is complete.
+    """
+
+    __tablename__ = "final_inspections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), unique=True, index=True
+    )
+
+    requested_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+    completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    inspector_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    internal_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Outcome of the latest sign-off attempt:
+    #   None     -> released, awaiting the client (pending / re-inspection)
+    #   "passed" -> client approved it (completed is also True; review unlocks)
+    #   "failed" -> client rejected it; the job sits in "Inspection Failed" until
+    #               staff fix the issue and send it back for re-inspection.
+    result: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Why the client rejected the most recent attempt (kept for context on the
+    # next re-inspection; every failure is also logged to the timeline + notes).
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # How many times the client has rejected this job's final inspection.
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+
+    failed_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    failed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    completed_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    job: Mapped["Job"] = relationship(back_populates="final_inspection")
+    attempts_log: Mapped[list["FinalInspectionAttempt"]] = relationship(
+        back_populates="final_inspection",
+        cascade="all, delete-orphan",
+        order_by="FinalInspectionAttempt.attempt_number",
+    )
+
+
+class FinalInspectionAttempt(Base):
+    """One row per pass/fail outcome of a job's final inspection.
+
+    The FinalInspection record only carries the latest state; this log keeps the
+    full history — every failed attempt with its reason, plus the final pass, in
+    order — so an inspection report can show what happened and when.
+    """
+
+    __tablename__ = "final_inspection_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), index=True
+    )
+    final_inspection_id: Mapped[int] = mapped_column(
+        ForeignKey("final_inspections.id", ondelete="CASCADE"), index=True
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1)
+    result: Mapped[str] = mapped_column(String(10))  # "passed" | "failed"
+    inspector_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    internal_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    final_inspection: Mapped["FinalInspection"] = relationship(
+        back_populates="attempts_log"
+    )
+
+
+class NCR(Base):
+    """Non-Conformance Report — an internal quality record.
+
+    Raised by staff/admin when something doesn't conform to requirements. It can
+    optionally be linked to a job (a snapshot of the job number is also stored so
+    the record survives if the job is later deleted). Follows a simple
+    Open → In Progress → Closed lifecycle with the usual quality fields
+    (category, severity, source, disposition, root cause, corrective action).
+    """
+
+    __tablename__ = "ncrs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ncr_number: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    sequence: Mapped[int] = mapped_column(Integer, index=True)
+
+    job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Snapshot of the linked job's number at creation, so the NCR still shows
+    # which job it related to even if that job is later deleted.
+    job_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(String(60), default="Other")
+    severity: Mapped[str] = mapped_column(String(20), default="Minor")
+    source: Mapped[str] = mapped_column(String(40), default="In-Process")
+    disposition: Mapped[str] = mapped_column(String(40), default="Pending")
+    root_cause: Mapped[str | None] = mapped_column(Text, nullable=True)
+    corrective_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assigned_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="Open", index=True)
+
+    raised_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    raised_by_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    closed_by_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    job: Mapped["Job | None"] = relationship(back_populates="ncrs")

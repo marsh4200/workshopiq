@@ -1,0 +1,179 @@
+"""Startup bootstrap: create tables and seed default data."""
+import logging
+
+from sqlalchemy import func, select, text
+
+from app.core.config import settings
+from app.core.database import AsyncSessionLocal, Base, engine
+from app.core.security import hash_password
+from app.models import InspectionTemplate, TemplateItem, User, UserRole
+from app.services.settings_service import ensure_defaults, get_all_settings, set_setting
+from app.services.templates_data import DEFAULT_TEMPLATES
+
+logger = logging.getLogger("workshopiq.bootstrap")
+
+
+async def init_models() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+# Foreign-key / hot-path indexes that SQLAlchemy's create_all won't add to
+# tables that already exist. These are the columns the job-detail loader and
+# the dashboard filter/sort on; without them Postgres falls back to full table
+# scans as rows accumulate (timeline_events grows on every action), which is
+# the classic "snappy at first, then a tab hangs after a while" symptom.
+#
+# CREATE INDEX IF NOT EXISTS is idempotent (no-op once built) and the index
+# names match SQLAlchemy's own convention (ix_<table>_<col>) so adding
+# index=True in the models later won't create duplicates. Tables here are
+# small (a workshop's jobs), so the brief build lock is negligible.
+INDEX_STATEMENTS = (
+    "CREATE INDEX IF NOT EXISTS ix_photos_job_id ON photos (job_id)",
+    "CREATE INDEX IF NOT EXISTS ix_documents_job_id ON documents (job_id)",
+    "CREATE INDEX IF NOT EXISTS ix_notes_job_id ON notes (job_id)",
+    "CREATE INDEX IF NOT EXISTS ix_timeline_events_job_id ON timeline_events (job_id)",
+    "CREATE INDEX IF NOT EXISTS ix_timeline_events_created_at ON timeline_events (created_at)",
+    "CREATE INDEX IF NOT EXISTS ix_inspections_job_id ON inspections (job_id)",
+    "CREATE INDEX IF NOT EXISTS ix_inspection_items_inspection_id ON inspection_items (inspection_id)",
+    "CREATE INDEX IF NOT EXISTS ix_jobs_date_received ON jobs (date_received)",
+)
+
+
+async def ensure_indexes() -> None:
+    async with engine.begin() as conn:
+        for stmt in INDEX_STATEMENTS:
+            await conn.execute(text(stmt))
+    logger.info("Ensured performance indexes")
+
+
+# Additive column migrations for tables that already exist (create_all won't
+# alter them). ADD COLUMN IF NOT EXISTS is idempotent on Postgres 9.6+, so this
+# is safe to run on every startup. Each new model column that ships after the
+# table's first creation needs a line here.
+COLUMN_STATEMENTS = (
+    # Final-inspection fail / re-inspection path.
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS result VARCHAR(10)",
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS failure_reason TEXT",
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS failed_by_id INTEGER REFERENCES users(id)",
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ",
+)
+
+# One-off data fixes after the columns exist. Backfill is idempotent (the WHERE
+# clause only matches rows that haven't been set yet).
+BACKFILL_STATEMENTS = (
+    # Inspections completed before the result column existed were all passes.
+    "UPDATE final_inspections SET result = 'passed' WHERE completed = TRUE AND result IS NULL",
+)
+
+
+async def ensure_columns() -> None:
+    async with engine.begin() as conn:
+        for stmt in COLUMN_STATEMENTS:
+            await conn.execute(text(stmt))
+        for stmt in BACKFILL_STATEMENTS:
+            await conn.execute(text(stmt))
+    logger.info("Ensured additive column migrations")
+
+
+async def seed() -> None:
+    async with AsyncSessionLocal() as db:
+        # Default admin
+        count = await db.scalar(select(func.count()).select_from(User))
+        if not count:
+            admin = User(
+                username=settings.DEFAULT_ADMIN_USERNAME,
+                full_name="Administrator",
+                hashed_password=hash_password(settings.DEFAULT_ADMIN_PASSWORD),
+                role=UserRole.administrator.value,
+                is_active=True,
+                must_change_password=True,
+            )
+            db.add(admin)
+            logger.info("Seeded default admin user")
+
+        # Settings defaults
+        await ensure_defaults(db)
+
+        # Inspection templates
+        existing = await db.scalar(
+            select(func.count()).select_from(InspectionTemplate)
+        )
+        if not existing:
+            for comp_type, items in DEFAULT_TEMPLATES.items():
+                template = InspectionTemplate(
+                    component_type=comp_type, name=f"{comp_type} Inspection"
+                )
+                db.add(template)
+                await db.flush()
+                for idx, label in enumerate(items):
+                    db.add(
+                        TemplateItem(
+                            template_id=template.id, label=label, order_index=idx
+                        )
+                    )
+            logger.info("Seeded default inspection templates")
+
+        await db.commit()
+
+
+async def sync_current_version() -> None:
+    """Set current_version from the applied-update marker if present, else from
+    the build's APP_VERSION. Honors the updater handshake: scripts/update.sh
+    writes the checked-out tag into .update-version, which we consume here so
+    the UI reflects what was actually deployed. Clears a now-satisfied
+    'available_version' if it matches.
+    """
+    from pathlib import Path
+
+    version = settings.APP_VERSION
+    marker = Path(settings.UPLOAD_DIR) / ".update-version"
+    try:
+        if marker.exists():
+            applied = marker.read_text().strip()
+            if applied:
+                version = applied
+            marker.unlink(missing_ok=True)  # consume it so it can't re-apply
+    except OSError as exc:
+        logger.warning("Could not read .update-version: %s", exc)
+
+    try:
+        async with AsyncSessionLocal() as db:
+            await set_setting(db, "current_version", version)
+            current = await get_all_settings(db)
+            if current.get("available_version", "") == version:
+                await set_setting(db, "available_version", "")
+            await db.commit()
+        logger.info("Current version set to %s", version)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not sync current version: %s", exc)
+
+
+async def run_bootstrap() -> None:
+    # With multiple uvicorn workers, this must run EXACTLY ONCE — not once per
+    # worker. sync_current_version() consumes the one-shot .update-version
+    # marker, so if every worker ran it, the first would set the new version
+    # and the rest would find the marker gone and clobber it back to the
+    # build's APP_VERSION (causing an update that "falls back" to the old
+    # version, then loops).
+    #
+    # So: the first worker grabs a try-lock and does all the setup. The others
+    # fail the try-lock, block on the same lock until the first is done (schema
+    # guaranteed ready), then release and skip the setup.
+    lock_key = 0x77081942
+    async with engine.connect() as conn:
+        won = await conn.scalar(select(func.pg_try_advisory_lock(lock_key)))
+        if not won:
+            await conn.execute(select(func.pg_advisory_lock(lock_key)))
+            await conn.execute(select(func.pg_advisory_unlock(lock_key)))
+            logger.info("Bootstrap already handled by another worker; skipping")
+            return
+        try:
+            await init_models()
+            await ensure_indexes()
+            await ensure_columns()
+            await seed()
+            await sync_current_version()
+        finally:
+            await conn.execute(select(func.pg_advisory_unlock(lock_key)))

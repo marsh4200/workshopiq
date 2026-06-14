@@ -1,0 +1,440 @@
+"""Pydantic schemas for API I/O."""
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
+
+
+# ---------- Auth ----------
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    must_change_password: bool = False
+    role: str
+    username: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+# ---------- Users ----------
+class UserBase(BaseModel):
+    username: str
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    role: str = "staff"
+    is_active: bool = True
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+class UserUpdate(BaseModel):
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = None
+
+
+class UserOut(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    must_change_password: bool
+    created_at: datetime
+
+
+# ---------- Settings ----------
+class SettingsOut(BaseModel):
+    company_name: str
+    company_logo: Optional[str] = None
+    dashboard_branding: Optional[str] = None
+    job_number_prefix: str
+    email_host: Optional[str] = None
+    email_port: Optional[str] = None
+    email_user: Optional[str] = None
+    email_from: Optional[str] = None
+    github_repo_url: Optional[str] = None
+    current_version: str
+    available_version: Optional[str] = None
+
+
+class SettingsUpdate(BaseModel):
+    company_name: Optional[str] = None
+    dashboard_branding: Optional[str] = None
+    job_number_prefix: Optional[str] = None
+    email_host: Optional[str] = None
+    email_port: Optional[str] = None
+    email_user: Optional[str] = None
+    email_password: Optional[str] = None
+    email_from: Optional[str] = None
+    github_repo_url: Optional[str] = None
+
+
+# ---------- Notes ----------
+class NoteCreate(BaseModel):
+    note_type: str = "internal"
+    body: str
+
+
+class NoteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    note_type: str
+    body: str
+    author_name: Optional[str] = None
+    created_at: datetime
+
+
+# ---------- Photos / Documents ----------
+class PhotoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    filename: str
+    original_name: Optional[str] = None
+    category: str
+    caption: Optional[str] = None
+    created_at: datetime
+
+
+class DocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    filename: str
+    original_name: Optional[str] = None
+    content_type: Optional[str] = None
+    created_at: datetime
+
+
+# ---------- Timeline ----------
+class TimelineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    event_type: str
+    description: str
+    actor_name: Optional[str] = None
+    created_at: datetime
+
+
+# ---------- Inspection templates ----------
+class TemplateItemIn(BaseModel):
+    label: str
+
+
+class TemplateItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    label: str
+    order_index: int
+
+
+class TemplateBase(BaseModel):
+    component_type: str
+    name: str
+
+
+class TemplateCreate(TemplateBase):
+    items: list[str] = []
+
+
+class TemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    items: Optional[list[str]] = None
+
+
+class TemplateOut(TemplateBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    items: list[TemplateItemOut] = []
+
+
+# ---------- Inspections ----------
+class InspectionItemUpdate(BaseModel):
+    id: int
+    result: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class InspectionItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    label: str
+    result: Optional[str] = None
+    notes: Optional[str] = None
+    order_index: int
+
+
+class InspectionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    component_type: str
+    title: Optional[str] = None
+    inspector_name: Optional[str] = None
+    completed: bool
+    created_at: datetime
+    items: list[InspectionItemOut] = []
+
+
+class InspectionCreate(BaseModel):
+    component_type: str
+    title: Optional[str] = None
+
+
+class InspectionUpdate(BaseModel):
+    title: Optional[str] = None
+    completed: Optional[bool] = None
+    items: Optional[list[InspectionItemUpdate]] = None
+
+
+# ---------- Jobs ----------
+class JobBase(BaseModel):
+    customer_name: str
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    po_number: Optional[str] = None
+    description: Optional[str] = None
+    component_type: Optional[str] = None
+
+
+class JobCreate(JobBase):
+    date_received: Optional[datetime] = None
+    client_user_ids: list[int] = []
+
+
+class JobUpdate(BaseModel):
+    customer_name: Optional[str] = None
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    po_number: Optional[str] = None
+    description: Optional[str] = None
+    component_type: Optional[str] = None
+    status: Optional[str] = None
+
+
+class FinalInspectionAttemptOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    attempt_number: int
+    result: str  # "passed" | "failed"
+    inspector_name: Optional[str] = None
+    reason: Optional[str] = None
+    internal_reference: Optional[str] = None
+    created_at: datetime
+
+
+class FinalInspectionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    job_id: int
+    requested_at: datetime
+    completed: bool
+    inspector_name: Optional[str] = None
+    internal_reference: Optional[str] = None
+    result: Optional[str] = None  # "passed" | "failed" | None (pending)
+    failure_reason: Optional[str] = None
+    attempts: int = 0
+    failed_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    attempts_log: list[FinalInspectionAttemptOut] = []
+
+
+class FinalInspectionSubmit(BaseModel):
+    inspector_name: str
+    internal_reference: Optional[str] = None
+
+
+class FinalInspectionFail(BaseModel):
+    inspector_name: str
+    reason: str
+
+
+# ---------- NCR (Non-Conformance Report) ----------
+class NCRBase(BaseModel):
+    title: str
+    description: str
+    category: str = "Other"
+    severity: str = "Minor"
+    source: str = "In-Process"
+    disposition: str = "Pending"
+    root_cause: Optional[str] = None
+    corrective_action: Optional[str] = None
+    assigned_to: Optional[str] = None
+    job_id: Optional[int] = None
+
+
+class NCRCreate(NCRBase):
+    pass
+
+
+class NCRUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    severity: Optional[str] = None
+    source: Optional[str] = None
+    disposition: Optional[str] = None
+    root_cause: Optional[str] = None
+    corrective_action: Optional[str] = None
+    assigned_to: Optional[str] = None
+    status: Optional[str] = None
+    job_id: Optional[int] = None
+
+
+class NCRListOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    ncr_number: str
+    title: str
+    category: str
+    severity: str
+    status: str
+    job_id: Optional[int] = None
+    job_number: Optional[str] = None
+    created_at: datetime
+
+
+class NCROut(NCRListOut):
+    description: str
+    source: str
+    disposition: str
+    root_cause: Optional[str] = None
+    corrective_action: Optional[str] = None
+    assigned_to: Optional[str] = None
+    raised_by_name: Optional[str] = None
+    closed_by_name: Optional[str] = None
+    updated_at: datetime
+    closed_at: Optional[datetime] = None
+
+
+class JobListOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    job_number: str
+    customer_name: str
+    component_type: Optional[str] = None
+    status: str
+    date_received: datetime
+    created_at: datetime
+
+
+class JobDetailOut(JobListOut):
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    po_number: Optional[str] = None
+    description: Optional[str] = None
+    photos: list[PhotoOut] = []
+    documents: list[DocumentOut] = []
+    notes: list[NoteOut] = []
+    timeline: list[TimelineOut] = []
+    inspections: list[InspectionOut] = []
+    client_user_ids: list[int] = []
+    final_inspection: Optional[FinalInspectionOut] = None
+    checked_in: bool = False
+
+
+class AssignClientsRequest(BaseModel):
+    user_ids: list[int]
+
+
+# ---------- Dashboard ----------
+class DashboardStats(BaseModel):
+    received: int
+    machining: int
+    completed: int
+    closed: int
+    total: int
+    status_breakdown: dict[str, int]
+    recent_activity: list[TimelineOut]
+
+
+# ---------- Reports ----------
+class JobReportItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    job_number: str
+    customer_name: str
+    po_number: Optional[str] = None
+    component_type: Optional[str] = None
+    status: str
+    date_received: datetime
+
+
+class JobReportResponse(BaseModel):
+    period: str  # "month" | "year"
+    year: int
+    month: Optional[int] = None
+    period_label: str  # e.g. "June 2026" or "2026"
+    generated_at: datetime
+    company_name: str
+    total: int
+    status_breakdown: dict[str, int]
+    status_filter: Optional[str] = None
+    jobs: list[JobReportItem] = []
+
+
+# ---------- Customer reviews ----------
+class ReviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    job_id: int
+    requested_at: datetime
+    completed: bool
+    rating: Optional[int] = None
+    feedback: Optional[str] = None
+    improvement: Optional[str] = None
+    reviewer_name: Optional[str] = None
+    completed_at: Optional[datetime] = None
+
+
+class ReviewSubmit(BaseModel):
+    rating: int
+    feedback: Optional[str] = None
+    improvement: Optional[str] = None
+
+
+class PendingReviewItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    job_id: int
+    job_number: str
+    customer_name: str
+
+
+class PendingInspectionItem(BaseModel):
+    """A final inspection released to the client and awaiting their sign-off.
+
+    Drives the client login banner. ``is_reinspection`` is True when this job
+    has already been failed at least once, so the banner can say "re-inspection"
+    rather than a first-time "ready for inspection".
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+    job_id: int
+    job_number: str
+    customer_name: str
+    attempts: int = 0
+    is_reinspection: bool = False
+
+
+class ReviewNotification(BaseModel):
+    review_id: int
+    job_id: int
+    job_number: str
+    customer_name: str
+    rating: Optional[int] = None
+    reviewer_name: Optional[str] = None
+    completed_at: Optional[datetime] = None
+
+
+class MarkSeenRequest(BaseModel):
+    review_ids: list[int] = []
