@@ -1,6 +1,7 @@
 """Full-system backup & restore endpoints (administrator only)."""
 import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -15,6 +16,24 @@ from app.models import User
 from app.services import backup_service
 
 router = APIRouter(prefix="/settings", tags=["backup"])
+
+# Bundled Android app. Lives under app/static so it is COPYed into the backend
+# image and travels with every git-tag deploy (no separate volume needed).
+ANDROID_APK_PATH = Path(__file__).resolve().parent.parent / "static" / "WorkshopIQ.apk"
+
+
+@router.get("/app/android")
+async def download_android_app(
+    _: User = Depends(require_admin),
+):
+    """Download the WorkshopIQ Android app (.apk). Administrators only."""
+    if not ANDROID_APK_PATH.is_file():
+        raise HTTPException(status_code=404, detail="Android app is not available.")
+    return FileResponse(
+        ANDROID_APK_PATH,
+        media_type="application/vnd.android.package-archive",
+        filename="WorkshopIQ.apk",
+    )
 
 
 @router.get("/backup")

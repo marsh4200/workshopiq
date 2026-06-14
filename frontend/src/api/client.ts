@@ -175,6 +175,22 @@ export const downloadBackup = async () => {
   URL.revokeObjectURL(url);
 };
 
+// Android app (.apk) download (admin)
+export const downloadAndroidApp = async () => {
+  const res = await api.get('/settings/app/android', { responseType: 'blob', timeout: 120000 });
+  const cd = res.headers['content-disposition'] || '';
+  const match = /filename="?([^"]+)"?/.exec(cd);
+  const name = match?.[1] || 'WorkshopIQ.apk';
+  const url = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
 export const restoreBackup = async (file: File) => {
   const fd = new FormData();
   fd.append('file', file);

@@ -35,6 +35,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import UpdateProgressDialog from '../components/UpdateProgressDialog';
 import BackupRestore from '../components/BackupRestore';
+import AppDownload from '../components/AppDownload';
 import type { AppSettings } from '../types';
 
 const NO_RIGHTS_MSG =
@@ -520,6 +521,15 @@ export default function Settings() {
           subtitle="Download a complete copy of the system, or restore everything from a backup file."
         >
           <BackupRestore />
+        </Section>
+      )}
+
+      {isAdmin && (
+        <Section
+          title="Android App"
+          subtitle="Download the WorkshopIQ Android app (.apk) to install on a device."
+        >
+          <AppDownload />
         </Section>
       )}
 
