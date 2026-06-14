@@ -414,7 +414,7 @@ export default function Settings() {
         <CardContent sx={{ p: 3 }}>
           {/* Version stat tiles */}
           <Grid container spacing={2} sx={{ mb: 2.5 }}>
-            <Grid item xs={6}>
+            <Grid item xs={6} sx={{ minWidth: 0 }}>
               <Box
                 sx={{
                   p: 2,
@@ -422,17 +422,28 @@ export default function Settings() {
                   bgcolor: 'action.hover',
                   border: '1px solid',
                   borderColor: 'divider',
+                  minWidth: 0,
+                  overflow: 'hidden',
                 }}
               >
                 <Typography variant="overline" color="text.secondary" letterSpacing={1}>
                   Installed
                 </Typography>
-                <Typography variant="h4" fontWeight={800} lineHeight={1.1}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 800,
+                    lineHeight: 1.1,
+                    fontSize: { xs: '1.5rem', sm: '2.125rem' },
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
+                  }}
+                >
                   v{s.current_version}
                 </Typography>
               </Box>
             </Grid>
-            <Grid item xs={6}>
+            <Grid item xs={6} sx={{ minWidth: 0 }}>
               <Box
                 sx={{
                   p: 2,
@@ -441,6 +452,8 @@ export default function Settings() {
                   borderColor: updateAvailable ? 'success.main' : 'divider',
                   bgcolor: updateAvailable ? 'success.dark' : 'action.hover',
                   color: updateAvailable ? 'success.contrastText' : 'inherit',
+                  minWidth: 0,
+                  overflow: 'hidden',
                 }}
               >
                 <Typography
@@ -450,7 +463,16 @@ export default function Settings() {
                 >
                   Latest
                 </Typography>
-                <Typography variant="h4" fontWeight={800} lineHeight={1.1}>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 800,
+                    lineHeight: 1.1,
+                    fontSize: { xs: '1.5rem', sm: '2.125rem' },
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
+                  }}
+                >
                   {s.available_version ? `v${s.available_version}` : '—'}
                 </Typography>
               </Box>
