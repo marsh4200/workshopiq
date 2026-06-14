@@ -414,7 +414,7 @@ export default function Settings() {
         <CardContent sx={{ p: 3 }}>
           {/* Version stat tiles */}
           <Grid container spacing={2} sx={{ mb: 2.5 }}>
-            <Grid item xs={6} sx={{ minWidth: 0 }}>
+            <Grid item xs={12} sm={6} sx={{ minWidth: 0 }}>
               <Box
                 sx={{
                   p: 2,
@@ -443,7 +443,7 @@ export default function Settings() {
                 </Typography>
               </Box>
             </Grid>
-            <Grid item xs={6} sx={{ minWidth: 0 }}>
+            <Grid item xs={12} sm={6} sx={{ minWidth: 0 }}>
               <Box
                 sx={{
                   p: 2,
