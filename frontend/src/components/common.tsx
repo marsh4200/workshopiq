@@ -36,6 +36,57 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// Relative luminance of a #rrggbb colour — used to pick white vs dark text
+// so the solid status banner stays readable on light colours (yellow, amber…).
+function hexLuminance(hex: string): number {
+  const h = hex.replace('#', '');
+  const ch = [0, 2, 4].map((i) => {
+    const c = parseInt(h.substring(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+// Big, solid status banner for the job header — far more visible than the
+// small chip, so the current stage reads at a glance.
+export function StatusBanner({ status }: { status: string }) {
+  const color = STATUS_COLORS[status] || '#94a3b8';
+  const onColor = hexLuminance(color) > 0.5 ? '#0f172a' : '#ffffff';
+  return (
+    <Box
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 1,
+        bgcolor: color,
+        color: onColor,
+        px: { xs: 1.75, sm: 2.25 },
+        py: { xs: 0.75, sm: 1 },
+        borderRadius: 2,
+        fontWeight: 800,
+        fontSize: { xs: '0.95rem', sm: '1.05rem' },
+        letterSpacing: 0.3,
+        lineHeight: 1.1,
+        boxShadow: `0 2px 12px ${color}55`,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <Box
+        component="span"
+        sx={{
+          width: 10,
+          height: 10,
+          borderRadius: '50%',
+          bgcolor: onColor,
+          opacity: 0.9,
+          flexShrink: 0,
+        }}
+      />
+      {status}
+    </Box>
+  );
+}
+
 const RESULT_COLORS: Record<string, string> = {
   pass: '#22c55e',
   fail: '#f43f5e',
