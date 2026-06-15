@@ -785,7 +785,7 @@ function PhotosTab({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { 'image/*': [] },
     onDrop: doUpload,
-    disabled: readOnly || uploading,
+    disabled: uploading,
   });
 
   const onCameraInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -807,9 +807,8 @@ function PhotosTab({
 
   return (
     <Box>
-      {!readOnly && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
               <TextField
                 select
@@ -870,7 +869,6 @@ function PhotosTab({
             </Box>
           </CardContent>
         </Card>
-      )}
 
       <Stack spacing={3}>
         <PhotoSection title="Before" photos={before} jobId={job.id} canDelete={!readOnly} onDelete={removePhoto} />
