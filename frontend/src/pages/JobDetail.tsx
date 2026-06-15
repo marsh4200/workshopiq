@@ -40,6 +40,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import DownloadIcon from '@mui/icons-material/Download';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PrintIcon from '@mui/icons-material/Print';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import {
@@ -1140,13 +1141,25 @@ function CheckInTab({ job, onUpdate }: { job: JobDetailT; onUpdate: () => Promis
     if (!status) return;
     const w = window.open('', '_blank');
     if (!w) return;
+    const stamped = status.checked_in;
+    const qrBlock = stamped
+      ? `<div style="position:relative;display:inline-block">` +
+        `<img src="${status.qr_png}" style="width:300px;height:300px;filter:grayscale(1) opacity(0.3)"/>` +
+        `<div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center">` +
+        `<div style="transform:rotate(-9deg);background:#2e7d32;color:#fff;font-weight:800;` +
+        `letter-spacing:2px;font-size:26px;padding:12px 40px;border:3px solid #fff;` +
+        `box-shadow:0 6px 18px rgba(0,0,0,0.3);white-space:nowrap">CHECKED IN</div>` +
+        `</div></div>`
+      : `<img src="${status.qr_png}" style="width:300px;height:300px"/>`;
     w.document.write(
       `<html><head><title>Check-in ${job.job_number}</title></head>` +
         `<body style="text-align:center;font-family:sans-serif;padding:40px;color:#111">` +
         `<h2 style="margin:0 0 4px">${job.job_number}</h2>` +
         `<div style="color:#555;margin-bottom:20px">${job.customer_name}</div>` +
-        `<img src="${status.qr_png}" style="width:300px;height:300px"/>` +
-        `<p style="font-size:13px;color:#555;margin-top:16px">Scan to check in · WorkshopIQ</p>` +
+        qrBlock +
+        `<p style="font-size:13px;color:#555;margin-top:16px">` +
+        (stamped ? 'Already checked in · WorkshopIQ' : 'Scan to check in · WorkshopIQ') +
+        `</p>` +
         `</body></html>`,
     );
     w.document.close();
@@ -1213,13 +1226,71 @@ function CheckInTab({ job, onUpdate }: { job: JobDetailT; onUpdate: () => Promis
                 p: 2,
                 display: 'grid',
                 placeItems: 'center',
+                overflow: 'hidden',
               }}
             >
-              <img
-                src={status.qr_png}
-                alt="Check-in QR code"
-                style={{ width: '100%', maxWidth: 260, imageRendering: 'pixelated' }}
-              />
+              <Box
+                sx={{
+                  position: 'relative',
+                  width: '100%',
+                  maxWidth: 260,
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+              >
+                <img
+                  src={status.qr_png}
+                  alt="Check-in QR code"
+                  style={{
+                    width: '100%',
+                    maxWidth: 260,
+                    imageRendering: 'pixelated',
+                    // Dim + desaturate the code once it's used so it's obviously
+                    // not meant to be scanned again.
+                    filter: status.checked_in ? 'grayscale(1) opacity(0.3)' : 'none',
+                  }}
+                />
+                {status.checked_in && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'grid',
+                      placeItems: 'center',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: '135%',
+                        transform: 'rotate(-9deg)',
+                        bgcolor: 'success.main',
+                        color: '#fff',
+                        py: 1.25,
+                        px: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 1,
+                        border: '2px solid rgba(255,255,255,0.9)',
+                        boxShadow: '0 6px 18px rgba(0,0,0,0.32)',
+                      }}
+                    >
+                      <CheckCircleIcon sx={{ fontSize: 26 }} />
+                      <Typography
+                        sx={{
+                          fontWeight: 900,
+                          letterSpacing: 1.5,
+                          fontSize: { xs: 18, sm: 22 },
+                          lineHeight: 1,
+                        }}
+                      >
+                        CHECKED IN
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
             </Box>
             <Typography
               variant="caption"
