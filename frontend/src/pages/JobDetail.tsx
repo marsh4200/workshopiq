@@ -68,7 +68,7 @@ import {
   failFinalInspection,
   apiError,
 } from '../api/client';
-import { StatusBadge, ResultBadge, fmtDate, fmtDay, EmptyState } from '../components/common';
+import { StatusBadge, StatusBanner, ResultBadge, fmtDate, fmtDay, EmptyState } from '../components/common';
 import PhotoGallery from '../components/PhotoGallery';
 import ReviewDialog from '../components/ReviewDialog';
 import { useAuth } from '../context/AuthContext';
@@ -196,24 +196,23 @@ export default function JobDetail() {
         )}
       </Stack>
 
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'flex-start', sm: 'center' }}
-        spacing={1}
-        sx={{ mb: 2 }}
-      >
-        <Box>
+      <Box sx={{ mb: 2 }}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={1.5}
+          sx={{ flexWrap: 'wrap', rowGap: 1 }}
+        >
           <Typography variant="h4" fontWeight={800}>
             {job.job_number}
           </Typography>
-          <Typography variant="body1" color="text.secondary">
-            {job.customer_name}
-            {job.component_type ? ` · ${job.component_type}` : ''}
-          </Typography>
-        </Box>
-        <StatusBadge status={job.status} />
-      </Stack>
+          <StatusBanner status={job.status} />
+        </Stack>
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
+          {job.customer_name}
+          {job.component_type ? ` · ${job.component_type}` : ''}
+        </Typography>
+      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
