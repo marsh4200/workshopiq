@@ -303,11 +303,16 @@ async def upload_photos(
     category: str = Form("general"),
     caption: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_staff),
+    user: User = Depends(get_current_user),
 ):
     job = await db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    # Anyone who can view the job may add photos: administrators, staff, and
+    # clients assigned to this job. Photos are visible to everyone with view
+    # access (see serve_file / assert_can_view), so a client's upload shows up
+    # for staff and vice versa.
+    await assert_can_view(db, job, user)
     saved: list[Photo] = []
     for upload in files:
         try:
