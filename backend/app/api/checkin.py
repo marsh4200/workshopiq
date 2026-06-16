@@ -34,6 +34,51 @@ from app.models import Inspection, Job, JobCheckin, TimelineEvent, User
 
 router = APIRouter(tags=["checkin"])
 
+# --- Fixed pick-lists for the check-in form (dropdowns, no free text) -------
+# These are the single source of truth for the check-in dropdowns. To add,
+# remove or rename an operator or machine, just edit these two lists.
+OPERATORS = [
+    "Dean",
+    "Werner",
+    "Hendrick",
+    "Kevin",
+    "Matthew",
+    "Lucky",
+    "Raymond",
+    "Steven",
+    "Sammy",
+    "Louis",
+]
+
+MACHINES = [
+    "Gemini Lathe",
+    "Knuth Lathe",
+    "Union Horizontal",
+    "San Roca Horizontal",
+    "TOS Horizontal",
+    "TOS Lathe",
+    '76" Vertical',
+    "Richards",
+    "Slotter",
+    "Press",
+    "VDF Lathe",
+    "Radial Drill",
+    "CNC Machining Center",
+    "CNC Lathe",
+]
+
+
+def _options(values: list[str], placeholder: str) -> str:
+    """Build <option> tags with a disabled placeholder selected first."""
+    opts = [
+        f'<option value="" disabled selected>{html.escape(placeholder)}</option>'
+    ]
+    opts += [
+        f'<option value="{html.escape(v)}">{html.escape(v)}</option>'
+        for v in values
+    ]
+    return "".join(opts)
+
 
 # ----------------------------- helpers -----------------------------
 def public_base_url(request: Request) -> str:
@@ -180,12 +225,20 @@ def _page(title: str, body: str, accent: str = "#14b8a6") -> str:
   }}
   .meta b {{ color: #e7eaf0; }}
   label {{ display: block; font-size: 13px; color: #9aa3b2; margin: 0 0 6px; font-weight: 500; }}
-  input[type=text] {{
+  input[type=text], select {{
     width: 100%; padding: 13px 14px; margin-bottom: 18px;
     background: #0f1115; border: 1px solid #2d333f; border-radius: 10px;
     color: #e7eaf0; font-size: 16px; font-family: inherit;
   }}
-  input[type=text]:focus {{ outline: none; border-color: {accent}; }}
+  input[type=text]:focus, select:focus {{ outline: none; border-color: {accent}; }}
+  select {{
+    -webkit-appearance: none; -moz-appearance: none; appearance: none;
+    padding-right: 40px; cursor: pointer;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa3b2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat: no-repeat; background-position: right 14px center;
+  }}
+  select:invalid {{ color: #5b6373; }}
+  select option {{ color: #e7eaf0; background: #171a21; }}
   button {{
     width: 100%; padding: 15px; border: none; border-radius: 10px;
     background: {accent}; color: #04201c; font-size: 16px; font-weight: 700;
@@ -292,11 +345,13 @@ async def checkin_form(token: str, db: AsyncSession = Depends(get_db)):
     <div class="meta">{_job_line(job)}</div>
     <form method="post" action="{settings.API_PREFIX}/checkin/{html.escape(token)}">
       <label for="operator">Operator name</label>
-      <input type="text" id="operator" name="operator" required autocomplete="name"
-             placeholder="Your name"/>
+      <select id="operator" name="operator" required>
+        {_options(OPERATORS, "Select operator…")}
+      </select>
       <label for="machine">Machine</label>
-      <input type="text" id="machine" name="machine" required
-             placeholder="e.g. Lathe 3 / Press B"/>
+      <select id="machine" name="machine" required>
+        {_options(MACHINES, "Select machine…")}
+      </select>
       <button type="submit">Check in</button>
     </form>"""
     return HTMLResponse(_page("Check-in", body))
