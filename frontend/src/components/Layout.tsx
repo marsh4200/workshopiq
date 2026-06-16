@@ -24,6 +24,7 @@ import AddIcon from '@mui/icons-material/AddCircleOutline';
 import PeopleIcon from '@mui/icons-material/GroupOutlined';
 import ChecklistIcon from '@mui/icons-material/FactCheckOutlined';
 import SettingsIcon from '@mui/icons-material/TuneOutlined';
+import StorageIcon from '@mui/icons-material/Storage';
 import ReportIcon from '@mui/icons-material/AssessmentOutlined';
 import NCRIcon from '@mui/icons-material/ReportProblemOutlined';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -63,6 +64,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { label: 'Inspection Templates', icon: <ChecklistIcon />, path: '/templates', roles: ['administrator'] },
       { label: 'Users', icon: <PeopleIcon />, path: '/users', roles: ['administrator'] },
+      { label: 'Samba', icon: <StorageIcon />, path: '/samba', roles: ['administrator'] },
     ],
   },
 ];

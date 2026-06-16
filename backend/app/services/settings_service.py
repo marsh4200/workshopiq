@@ -21,6 +21,15 @@ DEFAULTS = {
     "github_repo_url": "https://github.com/marsh4200/workshopiq",
     "current_version": app_settings.APP_VERSION,
     "available_version": "",
+    # Samba network-drive backup
+    "smb_server": "",
+    "smb_share": "",
+    "smb_username": "",
+    "smb_password": "",
+    "smb_subpath": "",
+    "smb_auto_backup": "0",
+    "smb_last_backup_at": "",
+    "smb_last_backup_status": "",
 }
 
 

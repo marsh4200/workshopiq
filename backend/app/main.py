@@ -1,4 +1,5 @@
 """WorkshopIQ FastAPI application entrypoint."""
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -15,12 +16,14 @@ from app.api import (
     ncr,
     reports,
     reviews,
+    samba,
     settings as settings_api,
     templates,
     users,
 )
 from app.core.bootstrap import run_bootstrap
 from app.core.config import settings
+from app.services.samba_scheduler import scheduler_loop
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("workshopiq")
@@ -31,7 +34,15 @@ async def lifespan(app: FastAPI):
     logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
     await run_bootstrap()
     logger.info("Bootstrap complete")
-    yield
+    samba_task = asyncio.create_task(scheduler_loop())
+    try:
+        yield
+    finally:
+        samba_task.cancel()
+        try:
+            await samba_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
@@ -48,7 +59,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (auth, users, jobs, templates, dashboard, settings_api, checkin, reports, reviews, final_inspection, ncr, backup):
+for r in (auth, users, jobs, templates, dashboard, settings_api, checkin, reports, reviews, final_inspection, ncr, backup, samba):
     app.include_router(r.router, prefix=settings.API_PREFIX)
 
 

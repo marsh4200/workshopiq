@@ -134,6 +134,34 @@ export interface AppSettings {
   available_version?: string | null;
 }
 
+export interface SambaStatus {
+  server?: string | null;
+  share?: string | null;
+  username?: string | null;
+  subpath?: string | null;
+  password_set: boolean;
+  auto_backup: boolean;
+  configured: boolean;
+  last_backup_at?: string | null;
+  last_backup_status?: string | null;
+  interval_hours: number;
+  keep_copies: number;
+}
+
+export interface SambaUpdate {
+  server?: string;
+  share?: string;
+  username?: string;
+  password?: string;
+  subpath?: string;
+  auto_backup?: boolean;
+}
+
+export interface SambaActionResult {
+  ok: boolean;
+  detail: string;
+}
+
 export interface DashboardStats {
   received: number;
   machining: number;

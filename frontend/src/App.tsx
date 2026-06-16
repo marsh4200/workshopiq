@@ -12,6 +12,7 @@ import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Templates from './pages/Templates';
 import Settings from './pages/Settings';
+import Samba from './pages/Samba';
 
 export default function App() {
   return (
@@ -70,6 +71,14 @@ export default function App() {
           }
         />
         <Route path="/settings" element={<Settings />} />
+        <Route
+          path="/samba"
+          element={
+            <ProtectedRoute roles={['administrator']}>
+              <Samba />
+            </ProtectedRoute>
+          }
+        />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

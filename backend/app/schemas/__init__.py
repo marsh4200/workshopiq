@@ -79,6 +79,35 @@ class SettingsUpdate(BaseModel):
     github_repo_url: Optional[str] = None
 
 
+# ---------- Samba network-drive backup ----------
+class SambaUpdate(BaseModel):
+    server: Optional[str] = None
+    share: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    subpath: Optional[str] = None
+    auto_backup: Optional[bool] = None
+
+
+class SambaStatusOut(BaseModel):
+    server: Optional[str] = None
+    share: Optional[str] = None
+    username: Optional[str] = None
+    subpath: Optional[str] = None
+    password_set: bool = False
+    auto_backup: bool = False
+    configured: bool = False
+    last_backup_at: Optional[str] = None
+    last_backup_status: Optional[str] = None
+    interval_hours: int = 6
+    keep_copies: int = 2
+
+
+class SambaConfigOut(BaseModel):
+    ok: bool
+    detail: str
+
+
 # ---------- Notes ----------
 class NoteCreate(BaseModel):
     note_type: str = "internal"

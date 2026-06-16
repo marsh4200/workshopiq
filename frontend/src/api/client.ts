@@ -18,6 +18,9 @@ import type {
   NCRMeta,
   Review,
   ReviewNotification,
+  SambaStatus,
+  SambaUpdate,
+  SambaActionResult,
   Template,
   User,
 } from '../types';
@@ -203,6 +206,16 @@ export const restoreBackup = async (file: File) => {
     counts: Record<string, number>;
   };
 };
+
+// Samba network-drive backup (admin)
+export const getSamba = async () =>
+  (await api.get<SambaStatus>('/settings/samba')).data;
+export const updateSamba = async (body: SambaUpdate) =>
+  (await api.put<SambaStatus>('/settings/samba', body)).data;
+export const testSamba = async () =>
+  (await api.post<SambaActionResult>('/settings/samba/test')).data;
+export const backupNowSamba = async () =>
+  (await api.post<SambaActionResult>('/settings/samba/backup-now', null, { timeout: 600000 })).data;
 
 // Dashboard
 export const getDashboard = async () => (await api.get<DashboardStats>('/dashboard')).data;
