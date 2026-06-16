@@ -55,6 +55,7 @@ export interface TimelineEvent {
 export interface RecentActivity extends TimelineEvent {
   job_id?: number | null;
   job_number?: string | null;
+  customer_name?: string | null;
 }
 
 export interface InspectionItem {

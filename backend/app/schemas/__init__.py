@@ -427,6 +427,7 @@ class RecentActivityOut(BaseModel):
     created_at: datetime
     job_id: Optional[int] = None
     job_number: Optional[str] = None
+    customer_name: Optional[str] = None
 
 
 class DashboardStats(BaseModel):

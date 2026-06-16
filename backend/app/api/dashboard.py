@@ -59,6 +59,7 @@ async def dashboard(
             created_at=e.created_at,
             job_id=e.job_id,
             job_number=e.job.job_number if e.job else None,
+            customer_name=e.job.customer_name if e.job else None,
         )
         for e in activity_rows.scalars().all()
     ]

@@ -199,7 +199,7 @@ export default function Dashboard() {
                     >
                       <Box sx={{ width: 7, height: 7, borderRadius: 4, bgcolor: 'primary.main', mt: 0.9, flexShrink: 0 }} />
                       <Box sx={{ minWidth: 0 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mb: 0.25 }}>
                           {e.job_number && (
                             <Chip
                               label={e.job_number}
@@ -207,10 +207,15 @@ export default function Dashboard() {
                               sx={{ height: 20, fontFamily: fontMono, fontWeight: 600, '& .MuiChip-label': { px: 0.75 } }}
                             />
                           )}
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {e.description}
-                          </Typography>
+                          {e.customer_name && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                              {e.customer_name}
+                            </Typography>
+                          )}
                         </Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {e.description}
+                        </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {e.actor_name ? `${e.actor_name} · ` : ''}
                           {fmtDate(e.created_at)}
