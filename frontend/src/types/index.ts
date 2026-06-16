@@ -80,6 +80,19 @@ export interface JobListItem {
   created_at: string;
 }
 
+export interface JobCostItem {
+  id: number;
+  job_id: number;
+  description: string;
+  supplier?: string | null;
+  quantity: number;
+  unit_cost: number;
+  line_total: number;
+  note?: string | null;
+  created_by_name?: string | null;
+  created_at: string;
+}
+
 export interface JobDetail extends JobListItem {
   contact_person?: string | null;
   phone?: string | null;

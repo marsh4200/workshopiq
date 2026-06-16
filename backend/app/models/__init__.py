@@ -1,5 +1,6 @@
 """SQLAlchemy ORM models for WorkshopIQ."""
 from datetime import datetime, timezone
+from decimal import Decimal
 from enum import Enum
 
 from sqlalchemy import (
@@ -7,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -102,6 +104,9 @@ class Job(Base):
     client_access: Mapped[list["ClientJobAccess"]] = relationship(
         back_populates="job", cascade="all, delete-orphan"
     )
+    cost_items: Mapped[list["JobCostItem"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
     checkins: Mapped[list["JobCheckin"]] = relationship(
         back_populates="job", cascade="all, delete-orphan"
     )
@@ -126,6 +131,39 @@ class ClientJobAccess(Base):
 
     user: Mapped["User"] = relationship(back_populates="job_access")
     job: Mapped["Job"] = relationship(back_populates="client_access")
+
+
+class JobCostItem(Base):
+    """A single internal supplier-cost line on a job.
+
+    Staff/admin only — these rows are never serialized into the job-detail
+    payload and are only reachable via the require_staff costing endpoints, so
+    clients can never see them. They're also intentionally NOT written to the
+    job timeline (which clients can view).
+    """
+
+    __tablename__ = "job_cost_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
+    description: Mapped[str] = mapped_column(String(255))
+    supplier: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), default=Decimal("1"))
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    created_by_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+    job: Mapped["Job"] = relationship(back_populates="cost_items")
+
+    @property
+    def line_total(self) -> float:
+        return float(self.quantity or 0) * float(self.unit_cost or 0)
 
 
 class JobCheckin(Base):

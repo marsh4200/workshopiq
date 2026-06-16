@@ -60,6 +60,9 @@ import {
   fetchMeta,
   listClients,
   assignClients,
+  listCostItems,
+  addCostItem,
+  deleteCostItem,
   getCheckin,
   getReview,
   requestReview,
@@ -74,7 +77,10 @@ import PhotoGallery from '../components/PhotoGallery';
 import ReviewDialog from '../components/ReviewDialog';
 import { useAuth } from '../context/AuthContext';
 import { useDeviceType } from '../hooks/useDeviceType';
-import type { CheckinStatus, Inspection, JobDetail as JobDetailT, Review, User } from '../types';
+import type { CheckinStatus, Inspection, JobDetail as JobDetailT, JobCostItem, Review, User } from '../types';
+
+const zarFmt = new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' });
+const fmtMoney = (n: number) => zarFmt.format(Number.isFinite(n) ? n : 0);
 
 const NOTE_TYPES = [
   { value: 'internal', label: 'Internal' },
@@ -101,7 +107,7 @@ function buildTabs(readOnly: boolean, isAdmin: boolean): string[] {
   const tabs = ['Overview', 'Inspections'];
   if (!readOnly) tabs.push('Check-In');
   tabs.push('Photos', 'Documents', 'Notes', 'Timeline', 'Final Inspection', 'Review');
-  if (!readOnly) tabs.push('Client Access');
+  if (!readOnly) tabs.push('Costing', 'Client Access');
   return tabs;
 }
 
@@ -281,6 +287,7 @@ export default function JobDetail() {
       {tabs[tab] === 'Review' && (
         <ReviewTab job={job} readOnly={readOnly} setError={setError} />
       )}
+      {tabs[tab] === 'Costing' && <CostingTab job={job} setError={setError} />}
       {tabs[tab] === 'Client Access' && (
         <ClientAccessTab job={job} onUpdate={reload} setError={setError} />
       )}
@@ -2031,6 +2038,177 @@ function ReviewTab({
         </Stack>
       </CardContent>
     </Card>
+  );
+}
+
+/* ---------------- Costing (staff & admin only) ---------------- */
+function CostingTab({
+  job,
+  setError,
+}: {
+  job: JobDetailT;
+  setError: (s: string) => void;
+}) {
+  const [items, setItems] = useState<JobCostItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ description: '', supplier: '', quantity: '1', unit_cost: '' });
+
+  const load = useCallback(() => {
+    setLoading(true);
+    listCostItems(job.id)
+      .then(setItems)
+      .catch((e) => setError(apiError(e, 'Failed to load costing')))
+      .finally(() => setLoading(false));
+  }, [job.id, setError]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const total = useMemo(
+    () => items.reduce((sum, i) => sum + (i.line_total || 0), 0),
+    [items],
+  );
+
+  const add = async () => {
+    if (!form.description.trim()) return;
+    setSaving(true);
+    try {
+      await addCostItem(job.id, {
+        description: form.description.trim(),
+        supplier: form.supplier.trim() || undefined,
+        quantity: Number(form.quantity) || 0,
+        unit_cost: Number(form.unit_cost) || 0,
+      });
+      setForm({ description: '', supplier: '', quantity: '1', unit_cost: '' });
+      load();
+    } catch (e) {
+      setError(apiError(e, 'Failed to add cost line'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id: number) => {
+    try {
+      await deleteCostItem(job.id, id);
+      load();
+    } catch (e) {
+      setError(apiError(e, 'Failed to delete cost line'));
+    }
+  };
+
+  return (
+    <Box>
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+            <LockOutlinedIcon fontSize="small" color="disabled" />
+            <Typography variant="body2" color="text.secondary">
+              Internal supplier costing — visible to staff and administrators only. Clients never see this tab.
+            </Typography>
+          </Stack>
+          <Grid container spacing={2} alignItems="flex-end">
+            <Grid item xs={12} sm={4}>
+              <TextField
+                label="Description"
+                size="small"
+                fullWidth
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField
+                label="Supplier"
+                size="small"
+                fullWidth
+                value={form.supplier}
+                onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={6} sm={2}>
+              <TextField
+                label="Qty"
+                size="small"
+                type="number"
+                fullWidth
+                value={form.quantity}
+                onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={6} sm={2}>
+              <TextField
+                label="Unit cost (R)"
+                size="small"
+                type="number"
+                fullWidth
+                value={form.unit_cost}
+                onChange={(e) => setForm((f) => ({ ...f, unit_cost: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12} sm={1}>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={add}
+                disabled={saving || !form.description.trim()}
+                sx={{ height: 40 }}
+              >
+                Add
+              </Button>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          {loading ? (
+            <Stack alignItems="center" sx={{ py: 4 }}>
+              <CircularProgress size={28} />
+            </Stack>
+          ) : items.length === 0 ? (
+            <EmptyState title="No costing lines yet" subtitle="Add your supplier costs above." />
+          ) : (
+            <Table size="small">
+              <TableBody>
+                <TableRow>
+                  <TableCell sx={{ color: 'text.secondary' }}>Description</TableCell>
+                  <TableCell sx={{ color: 'text.secondary' }}>Supplier</TableCell>
+                  <TableCell align="right" sx={{ color: 'text.secondary' }}>Qty</TableCell>
+                  <TableCell align="right" sx={{ color: 'text.secondary' }}>Unit</TableCell>
+                  <TableCell align="right" sx={{ color: 'text.secondary' }}>Line total</TableCell>
+                  <TableCell />
+                </TableRow>
+                {items.map((i) => (
+                  <TableRow key={i.id}>
+                    <TableCell>{i.description}</TableCell>
+                    <TableCell>{i.supplier || '—'}</TableCell>
+                    <TableCell align="right">{i.quantity}</TableCell>
+                    <TableCell align="right">{fmtMoney(i.unit_cost)}</TableCell>
+                    <TableCell align="right">{fmtMoney(i.line_total)}</TableCell>
+                    <TableCell align="right">
+                      <IconButton size="small" onClick={() => remove(i.id)} aria-label="Delete cost line">
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow>
+                  <TableCell colSpan={4} sx={{ border: 0 }} />
+                  <TableCell align="right" sx={{ border: 0, fontWeight: 700, fontSize: '1rem' }}>
+                    {fmtMoney(total)}
+                  </TableCell>
+                  <TableCell sx={{ border: 0 }} />
+                </TableRow>
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
   );
 }
 

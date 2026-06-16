@@ -380,6 +380,41 @@ class AssignClientsRequest(BaseModel):
     user_ids: list[int]
 
 
+# ---------- Job costing (staff/admin only) ----------
+class JobCostItemBase(BaseModel):
+    description: str
+    supplier: Optional[str] = None
+    quantity: float = 1
+    unit_cost: float = 0
+    note: Optional[str] = None
+
+
+class JobCostItemCreate(JobCostItemBase):
+    pass
+
+
+class JobCostItemUpdate(BaseModel):
+    description: Optional[str] = None
+    supplier: Optional[str] = None
+    quantity: Optional[float] = None
+    unit_cost: Optional[float] = None
+    note: Optional[str] = None
+
+
+class JobCostItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    job_id: int
+    description: str
+    supplier: Optional[str] = None
+    quantity: float
+    unit_cost: float
+    line_total: float
+    note: Optional[str] = None
+    created_by_name: Optional[str] = None
+    created_at: datetime
+
+
 # ---------- Dashboard ----------
 class DashboardStats(BaseModel):
     received: int

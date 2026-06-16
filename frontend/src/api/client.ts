@@ -7,6 +7,7 @@ import type {
   Inspection,
   JobDetail,
   JobListItem,
+  JobCostItem,
   JobReportResponse,
   LoginResponse,
   Note,
@@ -89,6 +90,21 @@ export const updateJob = async (id: number, body: Record<string, unknown>) =>
 export const deleteJob = (id: number) => api.delete(`/jobs/${id}`);
 export const assignClients = async (id: number, user_ids: number[]) =>
   (await api.put<JobDetail>(`/jobs/${id}/clients`, { user_ids })).data;
+
+// ---- Job costing (staff/admin only) ----
+export const listCostItems = async (jobId: number) =>
+  (await api.get<JobCostItem[]>(`/jobs/${jobId}/costs`)).data;
+export const addCostItem = async (
+  jobId: number,
+  body: { description: string; supplier?: string; quantity: number; unit_cost: number; note?: string },
+) => (await api.post<JobCostItem>(`/jobs/${jobId}/costs`, body)).data;
+export const updateCostItem = async (
+  jobId: number,
+  itemId: number,
+  body: Record<string, unknown>,
+) => (await api.put<JobCostItem>(`/jobs/${jobId}/costs/${itemId}`, body)).data;
+export const deleteCostItem = (jobId: number, itemId: number) =>
+  api.delete(`/jobs/${jobId}/costs/${itemId}`);
 
 // Check-in QR
 export const getCheckin = async (jobId: number) =>
