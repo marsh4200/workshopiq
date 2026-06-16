@@ -8,11 +8,13 @@ import {
   Divider,
   MenuItem,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -20,11 +22,12 @@ import {
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import SummarizeIcon from '@mui/icons-material/SummarizeOutlined';
-import { getJobReport, fetchMeta, apiError } from '../api/client';
-import { StatusBadge, fmtDay, EmptyState } from '../components/common';
+import TimelineIcon from '@mui/icons-material/TimelineOutlined';
+import { getJobReport, getJob, listJobs, fetchMeta, apiError } from '../api/client';
+import { StatusBadge, STATUS_COLORS, fmtDay, fmtDate, EmptyState } from '../components/common';
 import { useSettings } from '../context/SettingsContext';
 import { useDeviceType } from '../hooks/useDeviceType';
-import type { JobReportResponse } from '../types';
+import type { JobReportResponse, JobListItem, JobDetail } from '../types';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -34,12 +37,44 @@ const MONTHS = [
 const now = new Date();
 const YEARS = Array.from({ length: 7 }, (_, i) => now.getFullYear() - i);
 
+// Statuses eligible for an individual timeline report.
+const INDIVIDUAL_STATUSES = ['Machining', 'Inspection', 'Closed'];
+
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string),
   );
 
+const resultLabel = (r?: string | null) =>
+  !r ? 'Pending' : r === 'na' ? 'N/A' : r.charAt(0).toUpperCase() + r.slice(1);
+
 export default function Reports() {
+  const [tab, setTab] = useState(0);
+
+  return (
+    <Box>
+      <Typography variant="h4" fontWeight={800} sx={{ mb: 2 }}>
+        Reports
+      </Typography>
+
+      <Tabs
+        value={tab}
+        onChange={(_e, v) => setTab(v)}
+        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab label="Period Reports" />
+        <Tab label="Individual Job Report" />
+      </Tabs>
+
+      {tab === 0 ? <PeriodReports /> : <IndividualReport />}
+    </Box>
+  );
+}
+
+/* ===================================================================== */
+/* Period reports — the original monthly / yearly summary (unchanged).   */
+/* ===================================================================== */
+function PeriodReports() {
   const { settings } = useSettings();
   const isMobile = useDeviceType().isMobile;
 
@@ -213,18 +248,6 @@ export default function Reports() {
 
   return (
     <Box>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', sm: 'center' }}
-        spacing={2}
-        sx={{ mb: 3 }}
-      >
-        <Typography variant="h4" fontWeight={800}>
-          Reports
-        </Typography>
-      </Stack>
-
       {/* Controls */}
       <Card sx={{ p: { xs: 2, md: 2.5 }, mb: 3 }}>
         <Stack spacing={2}>
@@ -401,6 +424,426 @@ export default function Reports() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </Card>
+      )}
+    </Box>
+  );
+}
+
+/* ===================================================================== */
+/* Individual job report — pick customer → pick job → print timeline.    */
+/* ===================================================================== */
+function IndividualReport() {
+  const { settings } = useSettings();
+
+  const [jobs, setJobs] = useState<JobListItem[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [customer, setCustomer] = useState('');
+  const [jobId, setJobId] = useState<number | ''>('');
+
+  const [detail, setDetail] = useState<JobDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [error, setError] = useState('');
+
+  // Load every job once, then filter to the eligible statuses client-side.
+  useEffect(() => {
+    setLoadingJobs(true);
+    listJobs()
+      .then((all) => setJobs(all.filter((j) => INDIVIDUAL_STATUSES.includes(j.status))))
+      .catch((e) => setError(apiError(e, 'Failed to load jobs')))
+      .finally(() => setLoadingJobs(false));
+  }, []);
+
+  // Unique customer names (alphabetical) among eligible jobs.
+  const customers = useMemo(
+    () => Array.from(new Set(jobs.map((j) => j.customer_name))).sort((a, b) =>
+      a.localeCompare(b),
+    ),
+    [jobs],
+  );
+
+  // Jobs for the chosen customer, newest first.
+  const customerJobs = useMemo(
+    () =>
+      jobs
+        .filter((j) => j.customer_name === customer)
+        .sort((a, b) => +new Date(b.date_received) - +new Date(a.date_received)),
+    [jobs, customer],
+  );
+
+  // Load full detail when a job is selected.
+  useEffect(() => {
+    if (jobId === '') {
+      setDetail(null);
+      return;
+    }
+    setLoadingDetail(true);
+    setError('');
+    getJob(jobId)
+      .then(setDetail)
+      .catch((e) => {
+        setError(apiError(e, 'Failed to load job'));
+        setDetail(null);
+      })
+      .finally(() => setLoadingDetail(false));
+  }, [jobId]);
+
+  const logoUrl = settings?.company_logo
+    ? `/api/settings/logo/${settings.company_logo}`
+    : '';
+
+  const handlePrint = () => {
+    if (!detail) return;
+    const company = settings?.company_name || 'WorkshopIQ';
+    const generated = new Date().toLocaleString();
+    const statusColor = STATUS_COLORS[detail.status] || '#64748b';
+
+    // Timeline oldest → newest, so the report reads as the job's life story.
+    const events = [...detail.timeline].sort(
+      (a, b) => +new Date(a.created_at) - +new Date(b.created_at),
+    );
+
+    const detailRow = (label: string, value?: string | null) =>
+      `<tr><td class="k">${escapeHtml(label)}</td><td class="v">${escapeHtml(value || '—')}</td></tr>`;
+
+    const detailsTable = `
+      <table class="kv">
+        ${detailRow('Customer', detail.customer_name)}
+        ${detailRow('Contact', detail.contact_person)}
+        ${detailRow('Phone', detail.phone)}
+        ${detailRow('Email', detail.email)}
+        ${detailRow('PO Number', detail.po_number)}
+        ${detailRow('EQ Number', detail.eq_number)}
+        ${detailRow('Component', detail.component_type)}
+        ${detailRow('Date Received', detail.date_received ? new Date(detail.date_received).toLocaleDateString() : '—')}
+        ${detailRow('Created', detail.created_at ? new Date(detail.created_at).toLocaleString() : '—')}
+      </table>`;
+
+    const descBlock = detail.description
+      ? `<div class="section"><h2>Description</h2><p class="desc">${escapeHtml(detail.description)}</p></div>`
+      : '';
+
+    const timelineBlock = events.length
+      ? `<div class="section"><h2>Timeline</h2><ul class="timeline">
+          ${events
+            .map(
+              (ev) => `<li>
+                <div class="dot"></div>
+                <div class="evt">
+                  <div class="evt-desc">${escapeHtml(ev.description)}</div>
+                  <div class="evt-meta">${escapeHtml(ev.actor_name || 'System')} · ${escapeHtml(new Date(ev.created_at).toLocaleString())}</div>
+                </div>
+              </li>`,
+            )
+            .join('')}
+        </ul></div>`
+      : `<div class="section"><h2>Timeline</h2><p class="muted">No activity recorded.</p></div>`;
+
+    const inspectionsBlock = detail.inspections.length
+      ? `<div class="section"><h2>Inspections</h2>
+          ${detail.inspections
+            .map((insp) => {
+              const pass = insp.items.filter((i) => i.result === 'pass').length;
+              const fail = insp.items.filter((i) => i.result === 'fail').length;
+              const itemRows = insp.items
+                .map(
+                  (it) => `<tr>
+                    <td>${escapeHtml(it.label)}</td>
+                    <td>${escapeHtml(resultLabel(it.result))}</td>
+                    <td>${escapeHtml(it.notes || '')}</td>
+                  </tr>`,
+                )
+                .join('');
+              return `<div class="insp">
+                <div class="insp-head">
+                  <b>${escapeHtml(insp.title || insp.component_type)}</b>
+                  <span class="muted"> — ${escapeHtml(insp.inspector_name || '—')} · ${insp.completed ? 'Completed' : 'In progress'} · ${pass} pass / ${fail} fail</span>
+                </div>
+                ${
+                  insp.items.length
+                    ? `<table class="items"><thead><tr><th>Item</th><th>Result</th><th>Notes</th></tr></thead><tbody>${itemRows}</tbody></table>`
+                    : ''
+                }
+              </div>`;
+            })
+            .join('')}
+        </div>`
+      : '';
+
+    const fi = detail.final_inspection;
+    const finalBlock =
+      fi && fi.attempts_log && fi.attempts_log.length
+        ? `<div class="section"><h2>Final Inspection</h2>
+            <table class="items">
+              <thead><tr><th>#</th><th>Result</th><th>Inspector</th><th>Reference / Reason</th><th>When</th></tr></thead>
+              <tbody>
+                ${fi.attempts_log
+                  .map(
+                    (a) => `<tr>
+                      <td>${a.attempt_number}</td>
+                      <td>${escapeHtml(a.result === 'passed' ? 'Passed' : 'Failed')}</td>
+                      <td>${escapeHtml(a.inspector_name || '—')}</td>
+                      <td>${escapeHtml(a.reason || a.internal_reference || '—')}</td>
+                      <td>${escapeHtml(new Date(a.created_at).toLocaleString())}</td>
+                    </tr>`,
+                  )
+                  .join('')}
+              </tbody>
+            </table>
+          </div>`
+        : '';
+
+    const notesBlock = detail.notes.length
+      ? `<div class="section"><h2>Notes</h2><ul class="notes">
+          ${detail.notes
+            .map(
+              (n) => `<li>
+                <div class="note-body">${escapeHtml(n.body)}</div>
+                <div class="evt-meta">${escapeHtml(n.note_type)} · ${escapeHtml(n.author_name || 'System')} · ${escapeHtml(new Date(n.created_at).toLocaleString())}</div>
+              </li>`,
+            )
+            .join('')}
+        </ul></div>`
+      : '';
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(company)} — Job Report — ${escapeHtml(detail.job_number)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    color: #111; margin: 32px; font-size: 12px;
+  }
+  header { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #111; padding-bottom: 14px; }
+  header img { height: 52px; width: auto; object-fit: contain; }
+  .brand h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+  .brand .sub { color: #555; font-size: 12px; margin-top: 2px; }
+  .report-title { text-align: right; margin-left: auto; }
+  .report-title .t { font-size: 13px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.05em; }
+  .report-title .p { font-size: 20px; font-weight: 800; font-family: 'SF Mono', Consolas, monospace; }
+  .status { display: inline-block; margin-top: 6px; padding: 3px 12px; border-radius: 999px;
+    font-weight: 700; font-size: 11px; color: #fff; background: ${statusColor}; }
+  .section { margin-top: 22px; page-break-inside: avoid; }
+  .section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em;
+    border-bottom: 1px solid #ddd; padding-bottom: 5px; margin: 0 0 10px; }
+  table.kv { width: 100%; border-collapse: collapse; margin-top: 14px; }
+  table.kv td { padding: 5px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  table.kv td.k { width: 150px; color: #666; font-weight: 600; }
+  table.kv td.v { font-weight: 500; }
+  .desc { white-space: pre-wrap; margin: 0; }
+  ul.timeline { list-style: none; margin: 0; padding: 0; }
+  ul.timeline li { display: flex; gap: 12px; padding-bottom: 14px; position: relative; }
+  ul.timeline li:not(:last-child)::before {
+    content: ''; position: absolute; left: 5px; top: 14px; bottom: 0; width: 2px; background: #e2e8f0;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #2563eb; margin-top: 2px; flex-shrink: 0; z-index: 1; }
+  .evt-desc { font-weight: 600; }
+  .evt-meta { color: #777; font-size: 10.5px; margin-top: 1px; }
+  table.items { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  table.items th, table.items td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px; vertical-align: top; }
+  table.items th { background: #f3f4f6; text-transform: uppercase; letter-spacing: 0.03em; font-size: 10px; }
+  .insp { margin-bottom: 14px; }
+  .insp-head { margin-bottom: 4px; }
+  ul.notes { list-style: none; margin: 0; padding: 0; }
+  ul.notes li { padding: 8px 0; border-bottom: 1px solid #eee; }
+  .note-body { white-space: pre-wrap; }
+  .muted { color: #777; }
+  footer { margin-top: 28px; padding-top: 10px; border-top: 1px solid #ddd; color: #777; font-size: 10px; display: flex; justify-content: space-between; }
+  @media print {
+    body { margin: 14mm; }
+    @page { size: A4; margin: 12mm; }
+    .section { page-break-inside: auto; }
+    ul.timeline li, table.items tr, ul.notes li { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    ${logoUrl ? `<img src="${logoUrl}" alt="logo" onerror="this.style.display='none'" />` : ''}
+    <div class="brand">
+      <h1>${escapeHtml(company)}</h1>
+      <div class="sub">Individual Job Report</div>
+    </div>
+    <div class="report-title">
+      <div class="t">Job</div>
+      <div class="p">${escapeHtml(detail.job_number)}</div>
+      <div class="status">${escapeHtml(detail.status)}</div>
+    </div>
+  </header>
+
+  ${detailsTable}
+  ${descBlock}
+  ${timelineBlock}
+  ${inspectionsBlock}
+  ${finalBlock}
+  ${notesBlock}
+
+  <footer>
+    <span>Generated ${escapeHtml(generated)}</span>
+    <span>${escapeHtml(company)} · WorkshopIQ</span>
+  </footer>
+  <script>
+    window.onload = function () { window.focus(); window.print(); };
+  </script>
+</body>
+</html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) {
+      setError('Could not open print window — please allow pop-ups for this site.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
+  return (
+    <Box>
+      <Card sx={{ p: { xs: 2, md: 2.5 }, mb: 3 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Select a customer, then a job — print a detailed timeline report. Jobs in
+          Machining, Inspection or Closed are available.
+        </Typography>
+
+        {loadingJobs ? (
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 1 }}>
+            <CircularProgress size={18} />
+            <Typography variant="body2" color="text.secondary">
+              Loading jobs…
+            </Typography>
+          </Stack>
+        ) : (
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+            <TextField
+              select
+              label="Customer"
+              value={customer}
+              onChange={(e) => {
+                setCustomer(e.target.value);
+                setJobId('');
+              }}
+              sx={{ minWidth: 240 }}
+              disabled={!customers.length}
+            >
+              {customers.length === 0 ? (
+                <MenuItem value="" disabled>
+                  No eligible jobs
+                </MenuItem>
+              ) : (
+                customers.map((c) => (
+                  <MenuItem key={c} value={c}>
+                    {c}
+                  </MenuItem>
+                ))
+              )}
+            </TextField>
+
+            <TextField
+              select
+              label="Job"
+              value={jobId === '' ? '' : String(jobId)}
+              onChange={(e) => setJobId(Number(e.target.value))}
+              sx={{ minWidth: 280 }}
+              disabled={!customer}
+            >
+              {customerJobs.length === 0 ? (
+                <MenuItem value="" disabled>
+                  {customer ? 'No jobs for this customer' : 'Select a customer first'}
+                </MenuItem>
+              ) : (
+                customerJobs.map((j) => (
+                  <MenuItem key={j.id} value={String(j.id)}>
+                    {j.job_number} · {j.component_type || j.status} · {fmtDay(j.date_received)}
+                  </MenuItem>
+                ))
+              )}
+            </TextField>
+          </Stack>
+        )}
+      </Card>
+
+      {error && (
+        <Typography color="error" sx={{ mb: 2 }}>
+          {error}
+        </Typography>
+      )}
+
+      {loadingDetail && (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 2 }}>
+          <CircularProgress size={18} />
+          <Typography variant="body2" color="text.secondary">
+            Loading job…
+          </Typography>
+        </Stack>
+      )}
+
+      {detail && !loadingDetail && (
+        <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            spacing={2}
+            sx={{ mb: 2 }}
+          >
+            <Box>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Typography variant="h6" fontWeight={800}>
+                  {detail.job_number}
+                </Typography>
+                <StatusBadge status={detail.status} />
+              </Stack>
+              <Typography variant="body2" color="text.secondary">
+                {detail.customer_name}
+                {detail.component_type ? ` · ${detail.component_type}` : ''} · received{' '}
+                {fmtDay(detail.date_received)}
+              </Typography>
+            </Box>
+            <Button variant="contained" startIcon={<PrintIcon />} onClick={handlePrint}>
+              Print / Save PDF
+            </Button>
+          </Stack>
+
+          <Divider sx={{ mb: 2 }} />
+
+          {detail.timeline.length === 0 ? (
+            <EmptyState
+              icon={<TimelineIcon sx={{ fontSize: 48, opacity: 0.4 }} />}
+              title="No activity recorded yet"
+              subtitle="The report will still include the job details."
+            />
+          ) : (
+            <Stack spacing={0}>
+              {detail.timeline.map((ev, idx) => (
+                <Stack key={ev.id} direction="row" spacing={2}>
+                  <Stack alignItems="center">
+                    <Box
+                      sx={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        bgcolor: 'primary.main',
+                        mt: 0.5,
+                      }}
+                    />
+                    {idx < detail.timeline.length - 1 && (
+                      <Box sx={{ width: 2, flexGrow: 1, bgcolor: 'divider', my: 0.5 }} />
+                    )}
+                  </Stack>
+                  <Box sx={{ pb: 3 }}>
+                    <Typography fontWeight={600}>{ev.description}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {ev.actor_name || 'System'} · {fmtDate(ev.created_at)}
+                    </Typography>
+                  </Box>
+                </Stack>
+              ))}
+            </Stack>
           )}
         </Card>
       )}
