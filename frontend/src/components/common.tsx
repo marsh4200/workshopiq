@@ -1,4 +1,5 @@
 import { Avatar, Box, Chip, Typography } from '@mui/material';
+import LockIcon from '@mui/icons-material/Lock';
 import type { ReactNode } from 'react';
 import { fontDisplay, fontMono } from '../theme/theme';
 import { useSettings } from '../context/SettingsContext';
@@ -83,6 +84,40 @@ export function StatusBanner({ status }: { status: string }) {
         }}
       />
       {status}
+    </Box>
+  );
+}
+
+// Full-width "CLOSED" banner for the job overview. Sits above the detail cards
+// so a finished job reads unmistakably at a glance, without sitting on top of
+// any of the text. Only render this when the job is actually closed.
+export function ClosedBanner() {
+  const color = STATUS_COLORS['Closed'];
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        width: '100%',
+        px: { xs: 2, sm: 2.5 },
+        py: { xs: 1.25, sm: 1.5 },
+        borderRadius: 2,
+        color: '#fff',
+        background: `linear-gradient(135deg, ${color} 0%, #475569 100%)`,
+        border: `1px solid ${color}`,
+        boxShadow: `0 2px 14px ${color}66`,
+      }}
+    >
+      <LockIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 800, letterSpacing: 1, lineHeight: 1.1, fontSize: { xs: '1rem', sm: '1.15rem' } }}>
+          JOB CLOSED
+        </Typography>
+        <Typography variant="caption" sx={{ opacity: 0.85 }}>
+          This job has been closed.
+        </Typography>
+      </Box>
     </Box>
   );
 }

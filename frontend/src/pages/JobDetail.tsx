@@ -68,7 +68,7 @@ import {
   failFinalInspection,
   apiError,
 } from '../api/client';
-import { StatusBadge, StatusBanner, ResultBadge, fmtDate, fmtDay, EmptyState } from '../components/common';
+import { StatusBadge, StatusBanner, ClosedBanner, ResultBadge, fmtDate, fmtDay, EmptyState } from '../components/common';
 import PhotoGallery from '../components/PhotoGallery';
 import ReviewDialog from '../components/ReviewDialog';
 import { useAuth } from '../context/AuthContext';
@@ -361,6 +361,11 @@ function OverviewTab({
 
   return (
     <Grid container spacing={3}>
+      {job.status === 'Closed' && (
+        <Grid item xs={12}>
+          <ClosedBanner />
+        </Grid>
+      )}
       <Grid item xs={12} md={8}>
         <Card>
           <CardContent>
