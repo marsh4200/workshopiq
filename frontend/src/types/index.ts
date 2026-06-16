@@ -52,6 +52,11 @@ export interface TimelineEvent {
   created_at: string;
 }
 
+export interface RecentActivity extends TimelineEvent {
+  job_id?: number | null;
+  job_number?: string | null;
+}
+
 export interface InspectionItem {
   id: number;
   label: string;
@@ -184,7 +189,7 @@ export interface DashboardStats {
   closed: number;
   total: number;
   status_breakdown: Record<string, number>;
-  recent_activity: TimelineEvent[];
+  recent_activity: RecentActivity[];
 }
 
 export interface JobReportItem {

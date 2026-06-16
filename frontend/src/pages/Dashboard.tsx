@@ -179,19 +179,38 @@ export default function Dashboard() {
                   {stats.recent_activity.map((e) => (
                     <Box
                       key={e.id}
+                      onClick={e.job_id ? () => navigate(`/jobs/${e.job_id}`) : undefined}
                       sx={{
                         display: 'flex',
                         gap: 1.5,
                         py: 1.25,
                         borderBottom: '1px solid rgba(148,163,184,0.08)',
                         '&:last-of-type': { borderBottom: 'none' },
+                        ...(e.job_id
+                          ? {
+                              cursor: 'pointer',
+                              borderRadius: 1,
+                              px: 1,
+                              mx: -1,
+                              '&:hover': { bgcolor: 'rgba(148,163,184,0.08)' },
+                            }
+                          : {}),
                       }}
                     >
                       <Box sx={{ width: 7, height: 7, borderRadius: 4, bgcolor: 'primary.main', mt: 0.9, flexShrink: 0 }} />
                       <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {e.description}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                          {e.job_number && (
+                            <Chip
+                              label={e.job_number}
+                              size="small"
+                              sx={{ height: 20, fontFamily: fontMono, fontWeight: 600, '& .MuiChip-label': { px: 0.75 } }}
+                            />
+                          )}
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {e.description}
+                          </Typography>
+                        </Box>
                         <Typography variant="caption" color="text.secondary">
                           {e.actor_name ? `${e.actor_name} · ` : ''}
                           {fmtDate(e.created_at)}

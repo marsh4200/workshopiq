@@ -2,11 +2,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models import ClientJobAccess, Job, TimelineEvent, User, UserRole
-from app.schemas import DashboardStats, TimelineOut
+from app.schemas import DashboardStats, RecentActivityOut
 from app.services.templates_data import JOB_STATUSES
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -40,6 +41,7 @@ async def dashboard(
 
     activity_query = (
         select(TimelineEvent)
+        .options(selectinload(TimelineEvent.job))
         .order_by(TimelineEvent.created_at.desc())
         .limit(12)
     )
@@ -48,7 +50,18 @@ async def dashboard(
             TimelineEvent.job_id.in_(allowed_ids or {-1})
         )
     activity_rows = await db.execute(activity_query)
-    recent = [TimelineOut.model_validate(e) for e in activity_rows.scalars().all()]
+    recent = [
+        RecentActivityOut(
+            id=e.id,
+            event_type=e.event_type,
+            description=e.description,
+            actor_name=e.actor_name,
+            created_at=e.created_at,
+            job_id=e.job_id,
+            job_number=e.job.job_number if e.job else None,
+        )
+        for e in activity_rows.scalars().all()
+    ]
 
     return DashboardStats(
         received=received,

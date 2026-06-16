@@ -416,6 +416,19 @@ class JobCostItemOut(BaseModel):
 
 
 # ---------- Dashboard ----------
+class RecentActivityOut(BaseModel):
+    """A timeline event enriched with its job reference for the dashboard feed."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    event_type: str
+    description: str
+    actor_name: Optional[str] = None
+    created_at: datetime
+    job_id: Optional[int] = None
+    job_number: Optional[str] = None
+
+
 class DashboardStats(BaseModel):
     received: int
     machining: int
@@ -423,7 +436,7 @@ class DashboardStats(BaseModel):
     closed: int
     total: int
     status_breakdown: dict[str, int]
-    recent_activity: list[TimelineOut]
+    recent_activity: list[RecentActivityOut]
 
 
 # ---------- Reports ----------
