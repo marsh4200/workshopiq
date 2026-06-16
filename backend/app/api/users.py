@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, require_admin, require_staff
 from app.core.database import get_db
 from app.core.security import hash_password_async
 from app.models import User, UserRole
@@ -26,7 +26,7 @@ async def list_users(
 @router.get("/clients", response_model=list[UserOut])
 async def list_clients(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_staff),
 ):
     result = await db.execute(
         select(User).where(User.role == UserRole.client.value).order_by(User.full_name)

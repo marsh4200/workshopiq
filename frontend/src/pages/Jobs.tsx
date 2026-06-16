@@ -6,6 +6,7 @@ import {
   Card,
   Chip,
   CircularProgress,
+  Collapse,
   InputAdornment,
   MenuItem,
   Stack,
@@ -20,11 +21,30 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
 import WorkOutlineIcon from '@mui/icons-material/WorkOutline';
+import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
+import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
+import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import { listJobs, fetchMeta, apiError } from '../api/client';
 import { StatusBadge, fmtDay, EmptyState } from '../components/common';
 import { useAuth } from '../context/AuthContext';
 import { useDeviceType } from '../hooks/useDeviceType';
 import type { JobListItem } from '../types';
+
+interface CustomerGroup {
+  key: string;
+  name: string;
+  jobs: JobListItem[];
+}
+
+// Newest first: by received date, then job number as a stable fallback.
+function byRecency(a: JobListItem, b: JobListItem): number {
+  const da = a.date_received ? Date.parse(a.date_received) : 0;
+  const db = b.date_received ? Date.parse(b.date_received) : 0;
+  if (da !== db) return db - da;
+  return b.job_number.localeCompare(a.job_number, undefined, { numeric: true });
+}
 
 export default function Jobs() {
   const [params, setParams] = useSearchParams();
@@ -37,6 +57,8 @@ export default function Jobs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  // Which customer folders are open. Keyed by the normalised customer name.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const statusFilter = params.get('status') || '';
 
@@ -65,11 +87,102 @@ export default function Jobs() {
     );
   }, [jobs, search]);
 
+  // Group jobs into one folder per customer, alphabetical by name.
+  const groups = useMemo<CustomerGroup[]>(() => {
+    const map = new Map<string, CustomerGroup>();
+    for (const j of filtered) {
+      const name = (j.customer_name || 'Unassigned').trim() || 'Unassigned';
+      const key = name.toLowerCase();
+      const g = map.get(key);
+      if (g) g.jobs.push(j);
+      else map.set(key, { key, name, jobs: [j] });
+    }
+    const list = Array.from(map.values());
+    list.forEach((g) => g.jobs.sort(byRecency));
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    return list;
+  }, [filtered]);
+
+  const searching = search.trim().length > 0;
+  // While searching, every matching folder is forced open so results show.
+  // Otherwise a single customer opens by default; the rest start collapsed.
+  const isOpen = (key: string) =>
+    searching ? true : open[key] ?? groups.length === 1;
+
+  const toggle = (key: string) =>
+    setOpen((prev) => ({ ...prev, [key]: !(prev[key] ?? groups.length === 1) }));
+
+  const setAll = (value: boolean) =>
+    setOpen(Object.fromEntries(groups.map((g) => [g.key, value])));
+
   const setStatus = (s: string) => {
     if (s) params.set('status', s);
     else params.delete('status');
     setParams(params, { replace: true });
   };
+
+  const JobRows = ({ group }: { group: CustomerGroup }) =>
+    isMobile ? (
+      <Stack spacing={1.25} sx={{ p: 1.5, pt: 0.5 }}>
+        {group.jobs.map((j) => (
+          <Card
+            key={j.id}
+            variant="outlined"
+            onClick={() => navigate(`/jobs/${j.id}`)}
+            sx={{ p: 1.5, cursor: 'pointer', bgcolor: 'background.default' }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography fontWeight={800}>{j.job_number}</Typography>
+              <StatusBadge status={j.status} />
+            </Stack>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
+              {j.component_type ? (
+                <Chip label={j.component_type} size="small" variant="outlined" />
+              ) : (
+                <span />
+              )}
+              <Typography variant="caption" color="text.secondary">
+                {fmtDay(j.date_received)}
+              </Typography>
+            </Stack>
+          </Card>
+        ))}
+      </Stack>
+    ) : (
+      <Table size="small" sx={{ '& td, & th': { borderColor: 'divider' } }}>
+        <TableHead>
+          <TableRow>
+            <TableCell>Job #</TableCell>
+            <TableCell>Component</TableCell>
+            <TableCell>Received</TableCell>
+            <TableCell>Status</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {group.jobs.map((j) => (
+            <TableRow
+              key={j.id}
+              hover
+              onClick={() => navigate(`/jobs/${j.id}`)}
+              sx={{ cursor: 'pointer' }}
+            >
+              <TableCell sx={{ fontWeight: 700 }}>{j.job_number}</TableCell>
+              <TableCell>
+                {j.component_type ? (
+                  <Chip label={j.component_type} size="small" variant="outlined" />
+                ) : (
+                  '—'
+                )}
+              </TableCell>
+              <TableCell>{fmtDay(j.date_received)}</TableCell>
+              <TableCell>
+                <StatusBadge status={j.status} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
 
   return (
     <Box>
@@ -124,86 +237,82 @@ export default function Jobs() {
         </TextField>
       </Stack>
 
+      {!loading && !error && groups.length > 0 && (
+        <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, alignSelf: 'center' }}>
+            {groups.length} customer{groups.length === 1 ? '' : 's'} · {filtered.length} job
+            {filtered.length === 1 ? '' : 's'}
+          </Typography>
+          <Button size="small" startIcon={<UnfoldMoreIcon />} onClick={() => setAll(true)} disabled={searching}>
+            Expand all
+          </Button>
+          <Button size="small" startIcon={<UnfoldLessIcon />} onClick={() => setAll(false)} disabled={searching}>
+            Collapse all
+          </Button>
+        </Stack>
+      )}
+
       {loading ? (
         <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }}>
           <CircularProgress />
         </Box>
       ) : error ? (
         <Typography color="error">{error}</Typography>
-      ) : filtered.length === 0 ? (
+      ) : groups.length === 0 ? (
         <Card sx={{ p: 2 }}>
           <EmptyState
             icon={<WorkOutlineIcon sx={{ fontSize: 48, opacity: 0.4 }} />}
             title="No jobs found"
-            subtitle={statusFilter ? `No jobs with status "${statusFilter}".` : 'Create your first job to get started.'}
+            subtitle={
+              statusFilter
+                ? `No jobs with status "${statusFilter}".`
+                : 'Create your first job to get started.'
+            }
           />
         </Card>
-      ) : isMobile ? (
-        <Stack spacing={1.5}>
-          {filtered.map((j) => (
-            <Card
-              key={j.id}
-              onClick={() => navigate(`/jobs/${j.id}`)}
-              sx={{ p: 2, cursor: 'pointer' }}
-            >
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography fontWeight={800}>{j.job_number}</Typography>
-                <StatusBadge status={j.status} />
-              </Stack>
-              <Typography variant="body2" sx={{ mt: 0.5 }}>
-                {j.customer_name}
-              </Typography>
-              <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}>
-                {j.component_type ? (
-                  <Chip label={j.component_type} size="small" variant="outlined" />
-                ) : (
-                  <span />
-                )}
-                <Typography variant="caption" color="text.secondary">
-                  {fmtDay(j.date_received)}
-                </Typography>
-              </Stack>
-            </Card>
-          ))}
-        </Stack>
       ) : (
-        <Card>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Job #</TableCell>
-                <TableCell>Customer</TableCell>
-                <TableCell>Component</TableCell>
-                <TableCell>Received</TableCell>
-                <TableCell>Status</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filtered.map((j) => (
-                <TableRow
-                  key={j.id}
-                  hover
-                  onClick={() => navigate(`/jobs/${j.id}`)}
-                  sx={{ cursor: 'pointer' }}
+        <Stack spacing={1.5}>
+          {groups.map((g) => {
+            const expanded = isOpen(g.key);
+            return (
+              <Card key={g.key} sx={{ overflow: 'hidden' }}>
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  spacing={1.5}
+                  onClick={() => !searching && toggle(g.key)}
+                  sx={{
+                    px: 2,
+                    py: 1.5,
+                    cursor: searching ? 'default' : 'pointer',
+                    userSelect: 'none',
+                    '&:hover': searching ? {} : { bgcolor: 'action.hover' },
+                  }}
                 >
-                  <TableCell sx={{ fontWeight: 700 }}>{j.job_number}</TableCell>
-                  <TableCell>{j.customer_name}</TableCell>
-                  <TableCell>
-                    {j.component_type ? (
-                      <Chip label={j.component_type} size="small" variant="outlined" />
-                    ) : (
-                      '—'
-                    )}
-                  </TableCell>
-                  <TableCell>{fmtDay(j.date_received)}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={j.status} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+                  <Box sx={{ color: 'primary.main', display: 'flex' }}>
+                    {expanded ? <FolderOpenOutlinedIcon /> : <FolderOutlinedIcon />}
+                  </Box>
+                  <Typography fontWeight={800} sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                    {g.name}
+                  </Typography>
+                  <Chip label={g.jobs.length} size="small" sx={{ fontWeight: 700 }} />
+                  <ExpandMoreIcon
+                    sx={{
+                      transition: 'transform 0.2s',
+                      transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      color: 'text.secondary',
+                    }}
+                  />
+                </Stack>
+                <Collapse in={expanded} unmountOnExit>
+                  <Box sx={{ borderTop: 1, borderColor: 'divider' }}>
+                    <JobRows group={g} />
+                  </Box>
+                </Collapse>
+              </Card>
+            );
+          })}
+        </Stack>
       )}
     </Box>
   );

@@ -100,7 +100,7 @@ function buildTabs(readOnly: boolean, isAdmin: boolean): string[] {
   const tabs = ['Overview', 'Inspections'];
   if (!readOnly) tabs.push('Check-In');
   tabs.push('Photos', 'Documents', 'Notes', 'Timeline', 'Final Inspection', 'Review');
-  if (isAdmin) tabs.push('Client Access');
+  if (!readOnly) tabs.push('Client Access');
   return tabs;
 }
 
@@ -1971,7 +1971,7 @@ function ReviewTab({
   );
 }
 
-/* ---------------- Client Access (admin) ---------------- */
+/* ---------------- Client Access (staff & admin) ---------------- */
 function ClientAccessTab({
   job,
   onUpdate,

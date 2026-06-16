@@ -150,10 +150,10 @@ async def create_job(
     db.add(JobCheckin(job_id=job.id, token=secrets.token_urlsafe(12)))
     await log_event(db, job.id, "created", f"Job {job_number} created", user)
 
-    # Optionally grant client access at intake. Only administrators may set
-    # client access (mirrors the dedicated assign-clients endpoint), so this is
-    # silently ignored for non-admin staff.
-    if payload.client_user_ids and user.role == UserRole.administrator.value:
+    # Optionally grant client access at intake. Any staff member (not only
+    # administrators) may set client access, mirroring the dedicated
+    # assign-clients endpoint.
+    if payload.client_user_ids:
         added = 0
         for uid in dict.fromkeys(payload.client_user_ids):
             client = await db.get(User, uid)
@@ -243,7 +243,7 @@ async def assign_clients(
     job_id: int,
     payload: AssignClientsRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_staff),
 ):
     job = await load_job_detail(db, job_id)
     if not job:
