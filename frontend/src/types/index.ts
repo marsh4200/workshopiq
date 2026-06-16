@@ -85,6 +85,7 @@ export interface JobDetail extends JobListItem {
   phone?: string | null;
   email?: string | null;
   po_number?: string | null;
+  eq_number?: string | null;
   description?: string | null;
   photos: Photo[];
   documents: DocumentFile[];
@@ -92,6 +93,7 @@ export interface JobDetail extends JobListItem {
   timeline: TimelineEvent[];
   inspections: Inspection[];
   client_user_ids: number[];
+  client_names: string[];
   final_inspection?: FinalInspection | null;
   checked_in: boolean;
 }

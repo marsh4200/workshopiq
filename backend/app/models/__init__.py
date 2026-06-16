@@ -68,6 +68,7 @@ class Job(Base):
     phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     po_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    eq_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     date_received: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )

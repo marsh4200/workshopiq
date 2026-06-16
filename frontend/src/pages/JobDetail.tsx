@@ -330,6 +330,7 @@ function OverviewTab({
     phone: job.phone || '',
     email: job.email || '',
     po_number: job.po_number || '',
+    eq_number: job.eq_number || '',
     component_type: job.component_type || '',
     description: job.description || '',
   });
@@ -413,6 +414,9 @@ function OverviewTab({
                   <TextField label="PO Number" fullWidth value={form.po_number} onChange={(e) => setForm((f) => ({ ...f, po_number: e.target.value }))} />
                 </Grid>
                 <Grid item xs={12} sm={6}>
+                  <TextField label="EQ Number" fullWidth value={form.eq_number} onChange={(e) => setForm((f) => ({ ...f, eq_number: e.target.value }))} helperText="Optional" />
+                </Grid>
+                <Grid item xs={12} sm={6}>
                   <TextField select label="Component Type" fullWidth value={form.component_type} onChange={(e) => setForm((f) => ({ ...f, component_type: e.target.value }))}>
                     <MenuItem value="">— Not specified —</MenuItem>
                     {componentTypes.map((c) => (
@@ -434,9 +438,13 @@ function OverviewTab({
                   <Row label="Phone" value={job.phone} />
                   <Row label="Email" value={job.email} />
                   <Row label="PO Number" value={job.po_number} />
+                  <Row label="EQ Number" value={job.eq_number} />
                   <Row label="Component Type" value={job.component_type} />
                   <Row label="Date Received" value={fmtDay(job.date_received)} />
                   <Row label="Created" value={fmtDate(job.created_at)} />
+                  {!readOnly && job.client_names.length > 0 && (
+                    <Row label="Client Access" value={job.client_names.join(', ')} />
+                  )}
                   <TableCell sx={{ border: 0, pt: 2 }} colSpan={2}>
                     <Typography variant="caption" color="text.secondary">
                       Description

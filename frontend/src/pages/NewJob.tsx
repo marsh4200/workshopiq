@@ -35,6 +35,7 @@ export default function NewJob() {
     phone: '',
     email: '',
     po_number: '',
+    eq_number: '',
     component_type: '',
     date_received: new Date().toISOString().slice(0, 10),
     description: '',
@@ -141,6 +142,15 @@ export default function NewJob() {
               fullWidth
               value={form.po_number}
               onChange={(e) => set('po_number', e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="EQ Number"
+              fullWidth
+              value={form.eq_number}
+              onChange={(e) => set('eq_number', e.target.value)}
+              helperText="Optional"
             />
           </Grid>
           <Grid item xs={12} sm={6}>

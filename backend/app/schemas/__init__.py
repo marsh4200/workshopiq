@@ -230,6 +230,7 @@ class JobBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     po_number: Optional[str] = None
+    eq_number: Optional[str] = None
     description: Optional[str] = None
     component_type: Optional[str] = None
 
@@ -245,6 +246,7 @@ class JobUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     po_number: Optional[str] = None
+    eq_number: Optional[str] = None
     description: Optional[str] = None
     component_type: Optional[str] = None
     status: Optional[str] = None
@@ -361,6 +363,7 @@ class JobDetailOut(JobListOut):
     phone: Optional[str] = None
     email: Optional[str] = None
     po_number: Optional[str] = None
+    eq_number: Optional[str] = None
     description: Optional[str] = None
     photos: list[PhotoOut] = []
     documents: list[DocumentOut] = []
@@ -368,6 +371,7 @@ class JobDetailOut(JobListOut):
     timeline: list[TimelineOut] = []
     inspections: list[InspectionOut] = []
     client_user_ids: list[int] = []
+    client_names: list[str] = []
     final_inspection: Optional[FinalInspectionOut] = None
     checked_in: bool = False
 

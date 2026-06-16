@@ -58,6 +58,8 @@ COLUMN_STATEMENTS = (
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS failed_by_id INTEGER REFERENCES users(id)",
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ",
+    # Optional EQ number alongside the PO number.
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eq_number VARCHAR(120)",
 )
 
 # One-off data fixes after the columns exist. Backfill is idempotent (the WHERE

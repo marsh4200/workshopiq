@@ -84,7 +84,7 @@ async def load_job_detail(db: AsyncSession, job_id: int) -> Job | None:
             selectinload(Job.notes),
             selectinload(Job.timeline),
             selectinload(Job.inspections).selectinload(Inspection.items),
-            selectinload(Job.client_access),
+            selectinload(Job.client_access).selectinload(ClientJobAccess.user),
             selectinload(Job.final_inspection).selectinload(
                 FinalInspection.attempts_log
             ),
@@ -100,6 +100,11 @@ def serialize_detail(job: Job) -> JobDetailOut:
     data.notes = sorted(job.notes, key=lambda n: n.created_at, reverse=True)
     data.timeline = sorted(job.timeline, key=lambda t: t.created_at, reverse=True)
     data.client_user_ids = [a.user_id for a in job.client_access]
+    data.client_names = [
+        (a.user.full_name or a.user.username)
+        for a in job.client_access
+        if a.user
+    ]
     data.checked_in = any(c.checked_in for c in job.checkins)
     return data
 
@@ -138,6 +143,7 @@ async def create_job(
         phone=payload.phone,
         email=payload.email,
         po_number=payload.po_number,
+        eq_number=payload.eq_number,
         description=payload.description,
         component_type=payload.component_type,
         status="Received",
@@ -218,6 +224,7 @@ async def update_job(
         "phone",
         "email",
         "po_number",
+        "eq_number",
         "description",
         "component_type",
     ):
