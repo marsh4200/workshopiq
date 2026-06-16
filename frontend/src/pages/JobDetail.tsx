@@ -33,6 +33,7 @@ import {
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -321,6 +322,7 @@ function OverviewTab({
   onUpdate: () => Promise<void>;
   setError: (s: string) => void;
 }) {
+  const { isAdmin } = useAuth();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     customer_name: job.customer_name,
@@ -332,6 +334,8 @@ function OverviewTab({
     description: job.description || '',
   });
   const [saving, setSaving] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   const changeStatus = async (status: string) => {
     try {
@@ -360,12 +364,13 @@ function OverviewTab({
   };
 
   return (
-    <Grid container spacing={3}>
-      {job.status === 'Closed' && (
-        <Grid item xs={12}>
-          <ClosedBanner />
-        </Grid>
-      )}
+    <>
+      <Grid container spacing={3}>
+        {job.status === 'Closed' && (
+          <Grid item xs={12}>
+            <ClosedBanner />
+          </Grid>
+        )}
       <Grid item xs={12} md={8}>
         <Card>
           <CardContent>
@@ -453,7 +458,7 @@ function OverviewTab({
             </Typography>
             {readOnly ? (
               <StatusBadge status={job.status} />
-            ) : (
+            ) : isAdmin ? (
               <TextField
                 select
                 fullWidth
@@ -466,6 +471,25 @@ function OverviewTab({
                   </MenuItem>
                 ))}
               </TextField>
+            ) : (
+              <Stack spacing={1.25} alignItems="flex-start">
+                <StatusBadge status={job.status} />
+                <Typography variant="caption" color="text.secondary">
+                  Status updates automatically as the job moves through check-in,
+                  inspection and review.
+                </Typography>
+                {job.status !== 'Closed' && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="inherit"
+                    startIcon={<LockOutlinedIcon />}
+                    onClick={() => setConfirmClose(true)}
+                  >
+                    Close Job
+                  </Button>
+                )}
+              </Stack>
             )}
             <Divider sx={{ my: 2 }} />
             <Stack spacing={1}>
@@ -477,7 +501,38 @@ function OverviewTab({
           </CardContent>
         </Card>
       </Grid>
-    </Grid>
+      </Grid>
+
+      <Dialog open={confirmClose} onClose={() => !closing && setConfirmClose(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Close {job.job_number}?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            This marks the job as closed — use it when a job has been pulled or
+            cancelled. Normal jobs close automatically once the workflow finishes.
+            An administrator can reopen it if needed.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setConfirmClose(false)} disabled={closing}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="inherit"
+            startIcon={<LockOutlinedIcon />}
+            disabled={closing}
+            onClick={async () => {
+              setClosing(true);
+              await changeStatus('Closed');
+              setClosing(false);
+              setConfirmClose(false);
+            }}
+          >
+            {closing ? 'Closing…' : 'Close Job'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }
 

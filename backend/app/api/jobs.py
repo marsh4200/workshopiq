@@ -197,6 +197,15 @@ async def update_job(
     if payload.status and payload.status != job.status:
         if payload.status not in JOB_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status")
+        # The workflow drives status automatically (check-in → Machining,
+        # final inspection → Inspection/Completed, review → Closed). Non-admin
+        # staff may only manually CLOSE a job (e.g. it was pulled/cancelled);
+        # every other transition is left to the system.
+        if user.role != UserRole.administrator.value and payload.status != "Closed":
+            raise HTTPException(
+                status_code=403,
+                detail="Staff can only close a job manually — other statuses follow the workflow.",
+            )
         old = job.status
         job.status = payload.status
         await log_event(
