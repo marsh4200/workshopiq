@@ -8,6 +8,7 @@ import {
   Chip,
   CircularProgress,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
@@ -164,6 +165,7 @@ export default function Settings() {
   };
 
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [updateState, setUpdateState] = useState<'queued' | 'running' | 'done' | 'error' | 'idle'>('idle');
   const [updateLog, setUpdateLog] = useState('');
   const pollRef = useRef<number | null>(null);
@@ -177,13 +179,16 @@ export default function Settings() {
 
   useEffect(() => () => stopPolling(), []);
 
-  const doApply = async () => {
+  const requestApply = () => {
     if (!isAdmin) {
       setError(NO_RIGHTS_MSG);
       return;
     }
-    if (!window.confirm('Apply update? The database will be backed up and the server will restart.'))
-      return;
+    setConfirmOpen(true);
+  };
+
+  const confirmApply = async () => {
+    setConfirmOpen(false);
     setApplying(true);
     setError('');
     setMsg('');
@@ -498,7 +503,7 @@ export default function Settings() {
               size="large"
               disableElevation
               startIcon={<SystemUpdateAltIcon />}
-              onClick={doApply}
+              onClick={requestApply}
               disabled={!updateAvailable || applying}
               sx={{ fontWeight: 800 }}
             >
@@ -554,6 +559,84 @@ export default function Settings() {
           <AppDownload />
         </Section>
       )}
+
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: 2.5,
+              flexShrink: 0,
+              bgcolor: 'rgba(59,130,246,0.14)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <SystemUpdateAltIcon sx={{ color: '#60a5fa' }} />
+          </Box>
+          <Box>
+            <Typography sx={{ fontSize: 17, fontWeight: 700, lineHeight: 1.2 }}>
+              Install update
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              A new version is ready
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Chip
+            variant="outlined"
+            sx={{ mb: 2, height: 30 }}
+            label={
+              <Box
+                component="span"
+                sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, fontFamily: 'monospace', fontSize: 13 }}
+              >
+                <Box component="span" sx={{ color: 'text.secondary' }}>
+                  v{s.current_version}
+                </Box>
+                <Box component="span" sx={{ color: 'text.disabled' }}>
+                  →
+                </Box>
+                <Box component="span" sx={{ color: '#60a5fa', fontWeight: 700 }}>
+                  v{s.available_version}
+                </Box>
+              </Box>
+            }
+          />
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.6 }}>
+            WorkshopIQ will back up the database, pull the latest release, and rebuild. The app goes
+            offline for a minute or two, then comes back on its own.
+          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 1,
+              bgcolor: 'rgba(245,158,11,0.08)',
+              border: '1px solid rgba(245,158,11,0.2)',
+              borderRadius: 2,
+              px: 1.5,
+              py: 1,
+            }}
+          >
+            <RefreshIcon sx={{ fontSize: 18, color: 'warning.main', mt: '1px' }} />
+            <Typography variant="caption" sx={{ color: '#fbbf24', lineHeight: 1.5 }}>
+              The server restarts automatically — no action needed from you.
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setConfirmOpen(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button variant="contained" disableElevation startIcon={<UploadIcon />} onClick={confirmApply}>
+            Back up &amp; update
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <UpdateProgressDialog
         open={updateOpen}
