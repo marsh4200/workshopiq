@@ -1562,12 +1562,24 @@ function FinalInspectionTab({
   const [reason, setReason] = useState('');
   const [failing, setFailing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmRelease, setConfirmRelease] = useState(false);
+  const [offMachine, setOffMachine] = useState(false);
+
+  // True when this release is sending a failed job back round for re-inspection.
+  const isReinspect = !!fi && fi.result === 'failed';
+
+  const openConfirm = () => {
+    setOffMachine(false);
+    setConfirmRelease(true);
+  };
 
   const release = async () => {
     setBusy(true);
     try {
       await releaseFinalInspection(job.id);
       await onUpdate();
+      setConfirmRelease(false);
+      setOffMachine(false);
     } catch (e) {
       setError(apiError(e, 'Could not release final inspection'));
     } finally {
@@ -1690,7 +1702,7 @@ function FinalInspectionTab({
                   <Button
                     variant="contained"
                     color="primary"
-                    onClick={release}
+                    onClick={openConfirm}
                     disabled={busy}
                   >
                     {busy ? 'Sending…' : 'Send for re-inspection'}
@@ -1861,7 +1873,7 @@ function FinalInspectionTab({
                   pass it or fail it with a reason; the customer review unlocks only once
                   it passes.
                 </Typography>
-                <Button variant="contained" onClick={release} disabled={busy}>
+                <Button variant="contained" onClick={openConfirm} disabled={busy}>
                   {busy ? 'Submitting…' : 'Submit final inspection'}
                 </Button>
               </>
@@ -1876,6 +1888,45 @@ function FinalInspectionTab({
     <Stack spacing={2.5}>
       {content}
       <InspectionReport job={job} />
+
+      <Dialog
+        open={confirmRelease}
+        onClose={() => !busy && setConfirmRelease(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          {isReinspect ? 'Send for re-inspection?' : 'Ready for inspection?'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary" sx={{ mb: 1.5 }}>
+            {isReinspect
+              ? 'This sends the job back to the Inspection stage and re-opens the client sign-off form.'
+              : 'This moves the job to the Inspection stage and opens the sign-off form for the assigned client.'}
+          </Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={offMachine}
+                onChange={(e) => setOffMachine(e.target.checked)}
+              />
+            }
+            label="The job is off the machine and machining is finished."
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setConfirmRelease(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={release}
+            disabled={!offMachine || busy}
+          >
+            {busy ? 'Submitting…' : 'Confirm & submit'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
