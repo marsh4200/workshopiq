@@ -105,7 +105,7 @@ const NOTE_COLORS: Record<string, string> = {
  */
 function buildTabs(readOnly: boolean, isAdmin: boolean): string[] {
   const tabs = ['Overview', 'Inspections'];
-  if (!readOnly) tabs.push('Check-In');
+  if (!readOnly) tabs.push('Machine Check-In');
   tabs.push('Photos', 'Documents', 'Notes', 'Timeline', 'Final Inspection', 'Review');
   if (!readOnly) tabs.push('Costing', 'Client Access');
   return tabs;
@@ -267,7 +267,7 @@ export default function JobDetail() {
           setError={setError}
         />
       )}
-      {tabs[tab] === 'Check-In' && <CheckInTab job={job} onUpdate={reload} />}
+      {tabs[tab] === 'Machine Check-In' && <CheckInTab job={job} onUpdate={reload} />}
       {tabs[tab] === 'Inspections' && (
         <InspectionsTab job={job} readOnly={readOnly} onUpdate={reload} setError={setError} />
       )}
