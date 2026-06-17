@@ -1467,11 +1467,58 @@ function TimelineTab({ job }: { job: JobDetailT }) {
 }
 
 /* ---------------- Final Inspection ---------------- */
-function InspectionReport({ job }: { job: JobDetailT }) {
+function InspectionReport({
+  job,
+  readOnly,
+  onUpdate,
+  setError,
+}: {
+  job: JobDetailT;
+  readOnly: boolean;
+  onUpdate: () => Promise<void>;
+  setError: (s: string) => void;
+}) {
   const fi = job.final_inspection || null;
   const log = fi?.attempts_log || [];
   const photos = job.photos || [];
-  if (!log.length && !photos.length) return null;
+
+  const before = photos.filter((p) => p.category === 'before');
+  const after = photos.filter((p) => p.category === 'after');
+  const general = photos.filter(
+    (p) => p.category !== 'before' && p.category !== 'after',
+  );
+
+  const [uploading, setUploading] = useState(false);
+
+  const addAfterPhotos = async (files: File[]) => {
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      await uploadPhotos(job.id, files, 'after');
+      await onUpdate();
+    } catch (e) {
+      setError(apiError(e, 'Failed to upload photos'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onPickAfter = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) addAfterPhotos(Array.from(e.target.files));
+    e.target.value = '';
+  };
+
+  const removePhoto = async (photoId: number) => {
+    try {
+      await deletePhoto(job.id, photoId);
+      await onUpdate();
+    } catch (e) {
+      setError(apiError(e, 'Failed to delete photo'));
+    }
+  };
+
+  // Clients with nothing on record see nothing; staff always get the uploader.
+  if (!log.length && !photos.length && readOnly) return null;
   return (
     <Card>
       <CardContent>
@@ -1530,14 +1577,94 @@ function InspectionReport({ job }: { job: JobDetailT }) {
               })}
             </Stack>
           )}
-          {photos.length > 0 && (
-            <>
-              {log.length > 0 && <Divider sx={{ mt: 0.5 }} />}
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 0.5 }}>
-                Photos ({photos.length})
+          {photos.length > 0 && log.length > 0 && <Divider sx={{ mt: 0.5 }} />}
+
+          {before.length > 0 && (
+            <Box>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, mt: 0.5 }}>
+                Before photos ({before.length})
               </Typography>
-              <PhotoGallery jobId={job.id} photos={photos} canDelete={false} />
-            </>
+              <PhotoGallery jobId={job.id} photos={before} canDelete={false} />
+            </Box>
+          )}
+
+          <Box>
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              flexWrap="wrap"
+              useFlexGap
+              spacing={1}
+              sx={{ mb: 1, mt: 0.5 }}
+            >
+              <Typography variant="subtitle2" fontWeight={700}>
+                During / after inspection photos ({after.length})
+              </Typography>
+              {!readOnly && (
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    component="label"
+                    size="small"
+                    variant="outlined"
+                    startIcon={<PhotoCameraIcon />}
+                    disabled={uploading}
+                  >
+                    Camera
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      hidden
+                      onChange={onPickAfter}
+                    />
+                  </Button>
+                  <Button
+                    component="label"
+                    size="small"
+                    variant="outlined"
+                    startIcon={<AddIcon />}
+                    disabled={uploading}
+                  >
+                    Add photos
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      hidden
+                      onChange={onPickAfter}
+                    />
+                  </Button>
+                </Stack>
+              )}
+            </Stack>
+            {uploading && (
+              <Typography variant="caption" color="text.secondary">
+                Uploading…
+              </Typography>
+            )}
+            {after.length > 0 ? (
+              <PhotoGallery
+                jobId={job.id}
+                photos={after}
+                canDelete={!readOnly}
+                onDelete={removePhoto}
+              />
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No inspection photos yet.
+                {!readOnly ? ' Use Camera or Add photos to attach some.' : ''}
+              </Typography>
+            )}
+          </Box>
+
+          {general.length > 0 && (
+            <Box>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, mt: 0.5 }}>
+                Other photos ({general.length})
+              </Typography>
+              <PhotoGallery jobId={job.id} photos={general} canDelete={false} />
+            </Box>
           )}
         </Stack>
       </CardContent>
@@ -1887,7 +2014,12 @@ function FinalInspectionTab({
   return (
     <Stack spacing={2.5}>
       {content}
-      <InspectionReport job={job} />
+      <InspectionReport
+        job={job}
+        readOnly={readOnly}
+        onUpdate={onUpdate}
+        setError={setError}
+      />
 
       <Dialog
         open={confirmRelease}
