@@ -1005,12 +1005,18 @@ function DocumentsTab({
     }
   };
 
-  const open = async (filename: string) => {
+  const download = async (filename: string, originalName?: string | null) => {
     try {
       const url = await fetchFileBlob(job.id, filename);
-      window.open(url, '_blank');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = originalName || filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     } catch (e) {
-      setError(apiError(e, 'Failed to open document'));
+      setError(apiError(e, 'Failed to download document'));
     }
   };
 
@@ -1049,7 +1055,7 @@ function DocumentsTab({
                   <TableCell>{d.original_name || d.filename}</TableCell>
                   <TableCell>{fmtDate(d.created_at)}</TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={() => open(d.filename)}>
+                    <IconButton size="small" onClick={() => download(d.filename, d.original_name)}>
                       <DownloadIcon fontSize="small" />
                     </IconButton>
                     {!readOnly && (
