@@ -402,7 +402,7 @@ async def delete_document(
     job_id: int,
     doc_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_staff),
+    _: User = Depends(require_admin),
 ):
     doc = await db.get(Document, doc_id)
     if not doc or doc.job_id != job_id:
