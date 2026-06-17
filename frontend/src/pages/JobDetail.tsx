@@ -40,6 +40,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import DownloadIcon from '@mui/icons-material/Download';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PrintIcon from '@mui/icons-material/Print';
@@ -990,6 +991,7 @@ function DocumentsTab({
   onUpdate: () => Promise<void>;
   setError: (s: string) => void;
 }) {
+  const { isAdmin } = useAuth();
   const [uploading, setUploading] = useState(false);
 
   const onFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1017,6 +1019,18 @@ function DocumentsTab({
       URL.revokeObjectURL(url);
     } catch (e) {
       setError(apiError(e, 'Failed to download document'));
+    }
+  };
+
+  const view = async (filename: string) => {
+    try {
+      const url = await fetchFileBlob(job.id, filename);
+      const w = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!w) setError('Pop-up blocked — allow pop-ups to view documents.');
+      // Revoke a little later so the new tab has time to load the blob.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      setError(apiError(e, 'Failed to open document'));
     }
   };
 
@@ -1055,11 +1069,30 @@ function DocumentsTab({
                   <TableCell>{d.original_name || d.filename}</TableCell>
                   <TableCell>{fmtDate(d.created_at)}</TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={() => download(d.filename, d.original_name)}>
+                    <IconButton
+                      size="small"
+                      onClick={() => view(d.filename)}
+                      aria-label="View document"
+                      title="View"
+                    >
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() => download(d.filename, d.original_name)}
+                      aria-label="Download document"
+                      title="Download"
+                    >
                       <DownloadIcon fontSize="small" />
                     </IconButton>
-                    {!readOnly && (
-                      <IconButton size="small" color="error" onClick={() => remove(d.id)}>
+                    {isAdmin && (
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => remove(d.id)}
+                        aria-label="Delete document"
+                        title="Delete"
+                      >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     )}
