@@ -1023,13 +1023,22 @@ function DocumentsTab({
   };
 
   const view = async (filename: string) => {
+    // Open the tab synchronously inside the click gesture so the browser
+    // doesn't block it as a pop-up. Opening after the await below would
+    // lose the user-gesture context and get blocked.
+    const w = window.open('about:blank', '_blank');
+    if (!w) {
+      setError('Pop-up blocked — allow pop-ups for this site to view documents.');
+      return;
+    }
+    w.opener = null;
     try {
       const url = await fetchFileBlob(job.id, filename);
-      const w = window.open(url, '_blank', 'noopener,noreferrer');
-      if (!w) setError('Pop-up blocked — allow pop-ups to view documents.');
+      w.location.href = url;
       // Revoke a little later so the new tab has time to load the blob.
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
+      w.close();
       setError(apiError(e, 'Failed to open document'));
     }
   };
