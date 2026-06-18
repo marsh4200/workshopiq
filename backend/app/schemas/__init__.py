@@ -276,6 +276,12 @@ class FinalInspectionOut(BaseModel):
     attempts: int = 0
     failed_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    # Request-for-closure (admin-approved internal pass) path.
+    closure_status: Optional[str] = None  # None|"pending"|"approved"|"rejected"
+    closure_reason: Optional[str] = None
+    closure_requested_at: Optional[datetime] = None
+    closure_decided_at: Optional[datetime] = None
+    closure_rejection_reason: Optional[str] = None
     attempts_log: list[FinalInspectionAttemptOut] = []
 
 
@@ -287,6 +293,18 @@ class FinalInspectionSubmit(BaseModel):
 class FinalInspectionFail(BaseModel):
     inspector_name: str
     reason: str
+
+
+class ClosureRequest(BaseModel):
+    """Staff request to close a job out without a client final inspection."""
+
+    reason: Optional[str] = None
+
+
+class ClosureReject(BaseModel):
+    """Admin declines a closure request, optionally with a reason."""
+
+    reason: Optional[str] = None
 
 
 # ---------- NCR (Non-Conformance Report) ----------
@@ -506,6 +524,21 @@ class PendingInspectionItem(BaseModel):
     customer_name: str
     attempts: int = 0
     is_reinspection: bool = False
+
+
+class PendingClosureItem(BaseModel):
+    """A job whose closure request is awaiting an admin decision.
+
+    Drives the admin login banner so closure requests don't get missed.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+    job_id: int
+    job_number: str
+    customer_name: str
+    reason: Optional[str] = None
+    requested_by: Optional[str] = None
+    requested_at: Optional[datetime] = None
 
 
 class ReviewNotification(BaseModel):

@@ -250,6 +250,11 @@ export interface FinalInspection {
   attempts: number;
   failed_at?: string | null;
   completed_at?: string | null;
+  closure_status?: 'pending' | 'approved' | 'rejected' | null;
+  closure_reason?: string | null;
+  closure_requested_at?: string | null;
+  closure_decided_at?: string | null;
+  closure_rejection_reason?: string | null;
   attempts_log: FinalInspectionAttempt[];
 }
 
@@ -265,6 +270,15 @@ export interface PendingInspection {
   customer_name: string;
   attempts: number;
   is_reinspection: boolean;
+}
+
+export interface PendingClosure {
+  job_id: number;
+  job_number: string;
+  customer_name: string;
+  reason?: string | null;
+  requested_by?: string | null;
+  requested_at?: string | null;
 }
 
 export interface NCRListItem {

@@ -439,6 +439,31 @@ class FinalInspection(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # ---- Request for closure (client didn't / won't inspect) ----
+    # A parallel path to the normal client sign-off: staff request closure, an
+    # admin approves, and the inspection is then passed internally without the
+    # client. The normal client submit/pass/fail flow above is unchanged.
+    #   closure_status:
+    #     None        -> no closure request
+    #     "pending"   -> staff requested, awaiting an admin decision
+    #     "approved"  -> admin approved; inspection passed internally
+    #     "rejected"  -> admin declined; staff may re-request or inspect normally
+    closure_status: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    closure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    closure_requested_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    closure_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    closure_decided_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    closure_decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    closure_rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     job: Mapped["Job"] = relationship(back_populates="final_inspection")
     attempts_log: Mapped[list["FinalInspectionAttempt"]] = relationship(
         back_populates="final_inspection",

@@ -58,6 +58,14 @@ COLUMN_STATEMENTS = (
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS failed_by_id INTEGER REFERENCES users(id)",
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ",
+    # Final-inspection "request for closure" path (admin-approved internal pass).
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS closure_status VARCHAR(10)",
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS closure_reason TEXT",
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS closure_requested_by_id INTEGER REFERENCES users(id)",
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS closure_requested_at TIMESTAMPTZ",
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS closure_decided_by_id INTEGER REFERENCES users(id)",
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS closure_decided_at TIMESTAMPTZ",
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS closure_rejection_reason TEXT",
     # Optional EQ number alongside the PO number.
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eq_number VARCHAR(120)",
 )

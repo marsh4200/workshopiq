@@ -3,14 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Button, Rating, Stack, Typography } from '@mui/material';
 import StarOutlineIcon from '@mui/icons-material/StarBorderPurple500';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
+import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import {
+  getPendingClosures,
   getPendingInspections,
   getPendingReviews,
   getReviewNotifications,
   markReviewNotificationsSeen,
 } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import type { PendingInspection, PendingReview, ReviewNotification } from '../types';
+import type {
+  PendingClosure,
+  PendingInspection,
+  PendingReview,
+  ReviewNotification,
+} from '../types';
 import ReviewDialog from './ReviewDialog';
 
 /**
@@ -23,13 +30,86 @@ import ReviewDialog from './ReviewDialog';
  *    so it won't return — independently of other users.
  */
 export default function ReviewNotifier() {
-  const { isClient } = useAuth();
-  if (!isClient) return <StaffReviewAlert />;
+  const { isClient, isAdmin } = useAuth();
+  if (!isClient)
+    return (
+      <>
+        {isAdmin && <AdminClosureAlert />}
+        <StaffReviewAlert />
+      </>
+    );
   return (
     <>
       <ClientInspectionNag />
       <ClientNag />
     </>
+  );
+}
+
+/* ---------------- Admin: closure requests awaiting approval ---------------- */
+function AdminClosureAlert() {
+  const navigate = useNavigate();
+  const [pending, setPending] = useState<PendingClosure[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPendingClosures()
+      .then((items) => {
+        if (!cancelled) setPending(items);
+      })
+      .catch(() => {
+        if (!cancelled) setPending([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (pending.length === 0) return null;
+  const next = pending[0];
+  const more = pending.length - 1;
+
+  return (
+    <Box sx={{ mb: 2.5 }}>
+      <Alert
+        severity="warning"
+        icon={<GavelOutlinedIcon />}
+        sx={{
+          alignItems: 'center',
+          border: '1px solid',
+          borderColor: 'warning.main',
+          background: 'rgba(245,158,11,0.10)',
+        }}
+        action={
+          <Button
+            color="warning"
+            variant="contained"
+            size="small"
+            onClick={() =>
+              navigate(
+                `/jobs/${next.job_id}?tab=${encodeURIComponent('Final Inspection')}`,
+              )
+            }
+          >
+            Review
+          </Button>
+        }
+      >
+        <Stack>
+          <Typography sx={{ fontWeight: 700 }}>
+            {next.job_number} — closure awaiting your approval
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {next.requested_by ? `${next.requested_by} requested` : 'Requested'} to close{' '}
+            {next.customer_name} without a client final inspection.
+            {next.reason ? ` Reason: ${next.reason}.` : ''}
+            {more > 0
+              ? ` ${more} other closure request${more === 1 ? '' : 's'} also pending.`
+              : ''}
+          </Typography>
+        </Stack>
+      </Alert>
+    </Box>
   );
 }
 

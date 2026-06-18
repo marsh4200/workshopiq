@@ -27,7 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user, require_staff
+from app.api.deps import get_current_user, require_admin, require_staff
 from app.api.jobs import (
     actor_name,
     assert_can_view,
@@ -45,9 +45,12 @@ from app.models import (
     UserRole,
 )
 from app.schemas import (
+    ClosureReject,
+    ClosureRequest,
     FinalInspectionFail,
     FinalInspectionOut,
     FinalInspectionSubmit,
+    PendingClosureItem,
     PendingInspectionItem,
 )
 
@@ -188,6 +191,9 @@ async def pending_final_inspections(
         .join(FinalInspection, FinalInspection.job_id == Job.id)
         .where(FinalInspection.completed.is_(False))
         .where(FinalInspection.result.is_(None))
+        # If staff have requested closure (client isn't going to inspect), stop
+        # nagging the client about this job.
+        .where(FinalInspection.closure_status.is_distinct_from("pending"))
         .order_by(Job.sequence.desc())
     )
     if user.role == UserRole.client.value:
@@ -370,6 +376,251 @@ async def fail_final_inspection(
         user,
     )
     await _set_status(db, job, FAILED_STATUS, user)
+
+    await db.commit()
+    return await _get_fi_with_log(db, job_id)
+
+
+# ---------------------------------------------------------------------------
+# Request for closure — used when a client won't do the final inspection.
+#
+# Staff request closure; an admin approves it. On approval the inspection is
+# passed *internally* (no client sign-off) and the job moves to Completed, the
+# same terminal state as a normal client pass — so the review unlocks and the
+# rest of the app behaves identically. The normal client submit/pass/fail flow
+# above is left completely untouched; this is a separate, parallel path.
+# ---------------------------------------------------------------------------
+
+CLOSURE_PENDING = "pending"
+CLOSURE_APPROVED = "approved"
+CLOSURE_REJECTED = "rejected"
+
+
+def _closure_inspector_label(admin: User) -> str:
+    return f"Internal closure — approved by {actor_name(admin)}"
+
+
+@router.post(
+    "/jobs/{job_id}/final-inspection/closure-request",
+    response_model=FinalInspectionOut,
+)
+async def request_closure(
+    job_id: int,
+    payload: ClosureRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+):
+    """Staff request to close a job out without a client final inspection.
+
+    Creates the final-inspection record first if it doesn't exist yet (so a
+    closure can be requested even before the inspection is released), but does
+    NOT move the job into the Inspection stage and does NOT nag the client. The
+    request then waits for an admin to approve or reject it.
+    """
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    fi = await _get_fi(db, job_id)
+
+    if fi and fi.completed:
+        raise HTTPException(
+            status_code=409,
+            detail="This inspection has already passed — there's nothing to close.",
+        )
+    if fi and fi.closure_status == CLOSURE_PENDING:
+        raise HTTPException(
+            status_code=409,
+            detail="A closure request is already pending admin approval.",
+        )
+
+    if not fi:
+        # First time we touch this job's inspection — require the QR check-in,
+        # same gate as releasing the inspection normally.
+        if not await _is_checked_in(db, job_id):
+            raise HTTPException(
+                status_code=409,
+                detail="Scan the QR code to check the job in before requesting "
+                "closure.",
+            )
+        fi = FinalInspection(job_id=job_id, requested_by_id=user.id)
+        db.add(fi)
+        await db.flush()  # assign fi.id
+
+    reason = (payload.reason or "").strip() or None
+
+    fi.closure_status = CLOSURE_PENDING
+    fi.closure_reason = reason
+    fi.closure_requested_by_id = user.id
+    fi.closure_requested_at = datetime.now(timezone.utc)
+    # Clear any previous decision so a re-request starts clean.
+    fi.closure_decided_by_id = None
+    fi.closure_decided_at = None
+    fi.closure_rejection_reason = None
+
+    detail = "Closure requested (client to skip final inspection)"
+    if reason:
+        detail += f": {reason}"
+    db.add(
+        Note(
+            job_id=job_id,
+            note_type="action",
+            body=detail,
+            author_id=user.id,
+            author_name=actor_name(user),
+        )
+    )
+    await log_event(db, job_id, "final_inspection", detail, user)
+
+    await db.commit()
+    return await _get_fi_with_log(db, job_id)
+
+
+@router.get(
+    "/final-inspection/closure-pending",
+    response_model=list[PendingClosureItem],
+)
+async def pending_closures(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """Closure requests awaiting an admin decision (drives the admin banner)."""
+    requester = User.__table__.alias("requester")
+    query = (
+        select(Job, FinalInspection, requester.c.full_name, requester.c.username)
+        .join(FinalInspection, FinalInspection.job_id == Job.id)
+        .join(
+            requester,
+            requester.c.id == FinalInspection.closure_requested_by_id,
+            isouter=True,
+        )
+        .where(FinalInspection.closure_status == CLOSURE_PENDING)
+        .order_by(FinalInspection.closure_requested_at.asc())
+    )
+    rows = (await db.execute(query)).all()
+    return [
+        PendingClosureItem(
+            job_id=job.id,
+            job_number=job.job_number,
+            customer_name=job.customer_name,
+            reason=fi.closure_reason,
+            requested_by=full_name or username,
+            requested_at=fi.closure_requested_at,
+        )
+        for job, fi, full_name, username in rows
+    ]
+
+
+@router.post(
+    "/jobs/{job_id}/final-inspection/closure-approve",
+    response_model=FinalInspectionOut,
+)
+async def approve_closure(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """Admin approves a closure request: inspection passes internally."""
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    fi = await _get_fi(db, job_id)
+    if not fi or fi.closure_status != CLOSURE_PENDING:
+        raise HTTPException(
+            status_code=409, detail="There's no pending closure request to approve."
+        )
+    if fi.completed:
+        raise HTTPException(
+            status_code=409, detail="This inspection has already passed."
+        )
+
+    label = _closure_inspector_label(user)
+    now = datetime.now(timezone.utc)
+
+    fi.result = "passed"
+    fi.completed = True
+    fi.completed_by_id = user.id
+    fi.completed_at = now
+    fi.inspector_name = label
+    if not fi.internal_reference and fi.closure_reason:
+        fi.internal_reference = fi.closure_reason
+
+    fi.closure_status = CLOSURE_APPROVED
+    fi.closure_decided_by_id = user.id
+    fi.closure_decided_at = now
+
+    attempt_no = await _next_attempt_number(db, fi.id)
+    db.add(
+        FinalInspectionAttempt(
+            job_id=job_id,
+            final_inspection_id=fi.id,
+            attempt_number=attempt_no,
+            result="passed",
+            inspector_name=label,
+            internal_reference=fi.closure_reason,
+            created_by_id=user.id,
+        )
+    )
+
+    detail = "Closure approved — final inspection passed internally"
+    db.add(
+        Note(
+            job_id=job_id,
+            note_type="action",
+            body=detail,
+            author_id=user.id,
+            author_name=actor_name(user),
+        )
+    )
+    await log_event(db, job_id, "final_inspection", detail, user)
+    await _set_status(db, job, COMPLETED_STATUS, user)
+
+    await db.commit()
+    return await _get_fi_with_log(db, job_id)
+
+
+@router.post(
+    "/jobs/{job_id}/final-inspection/closure-reject",
+    response_model=FinalInspectionOut,
+)
+async def reject_closure(
+    job_id: int,
+    payload: ClosureReject,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """Admin declines a closure request. The job is left where it is so staff
+    can either re-request closure or run the normal client inspection."""
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    fi = await _get_fi(db, job_id)
+    if not fi or fi.closure_status != CLOSURE_PENDING:
+        raise HTTPException(
+            status_code=409, detail="There's no pending closure request to reject."
+        )
+
+    reason = (payload.reason or "").strip() or None
+    fi.closure_status = CLOSURE_REJECTED
+    fi.closure_decided_by_id = user.id
+    fi.closure_decided_at = datetime.now(timezone.utc)
+    fi.closure_rejection_reason = reason
+
+    detail = "Closure request declined by admin"
+    if reason:
+        detail += f": {reason}"
+    db.add(
+        Note(
+            job_id=job_id,
+            note_type="action",
+            body=detail,
+            author_id=user.id,
+            author_name=actor_name(user),
+        )
+    )
+    await log_event(db, job_id, "final_inspection", detail, user)
 
     await db.commit()
     return await _get_fi_with_log(db, job_id)

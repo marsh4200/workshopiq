@@ -14,6 +14,7 @@ import type {
   Photo,
   PendingReview,
   PendingInspection,
+  PendingClosure,
   NCR,
   NCRListItem,
   NCRMeta,
@@ -271,6 +272,18 @@ export const failFinalInspection = async (
 ) => (await api.post<FinalInspection>(`/jobs/${jobId}/final-inspection/fail`, body)).data;
 export const getPendingInspections = async () =>
   (await api.get<PendingInspection[]>('/final-inspection/pending')).data;
+
+// Request for closure (client won't inspect → admin-approved internal pass)
+export const requestClosure = async (jobId: number, body: { reason?: string }) =>
+  (await api.post<FinalInspection>(`/jobs/${jobId}/final-inspection/closure-request`, body))
+    .data;
+export const approveClosure = async (jobId: number) =>
+  (await api.post<FinalInspection>(`/jobs/${jobId}/final-inspection/closure-approve`)).data;
+export const rejectClosure = async (jobId: number, body: { reason?: string }) =>
+  (await api.post<FinalInspection>(`/jobs/${jobId}/final-inspection/closure-reject`, body))
+    .data;
+export const getPendingClosures = async () =>
+  (await api.get<PendingClosure[]>('/final-inspection/closure-pending')).data;
 export const getReviewNotifications = async () =>
   (await api.get<ReviewNotification[]>('/reviews/notifications')).data;
 export const markReviewNotificationsSeen = async (review_ids: number[]) =>

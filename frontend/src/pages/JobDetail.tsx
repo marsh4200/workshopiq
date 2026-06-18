@@ -71,6 +71,9 @@ import {
   releaseFinalInspection,
   submitFinalInspection,
   failFinalInspection,
+  requestClosure,
+  approveClosure,
+  rejectClosure,
   apiError,
 } from '../api/client';
 import { StatusBadge, StatusBanner, ClosedBanner, ResultBadge, fmtDate, fmtDay, EmptyState } from '../components/common';
@@ -1796,6 +1799,79 @@ function FinalInspectionTab({
     }
   };
 
+  // ---- Request for closure (client won't inspect → admin-approved pass) ----
+  const { isAdmin } = useAuth();
+  const [closureOpen, setClosureOpen] = useState(false);
+  const [closureReason, setClosureReason] = useState('');
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const submitClosureRequest = async () => {
+    setBusy(true);
+    try {
+      await requestClosure(job.id, { reason: closureReason.trim() || undefined });
+      setClosureOpen(false);
+      setClosureReason('');
+      await onUpdate();
+    } catch (e) {
+      setError(apiError(e, 'Could not request closure'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doApproveClosure = async () => {
+    setBusy(true);
+    try {
+      await approveClosure(job.id);
+      await onUpdate();
+    } catch (e) {
+      setError(apiError(e, 'Could not approve closure'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doRejectClosure = async () => {
+    setBusy(true);
+    try {
+      await rejectClosure(job.id, { reason: rejectReason.trim() || undefined });
+      setRejectOpen(false);
+      setRejectReason('');
+      await onUpdate();
+    } catch (e) {
+      setError(apiError(e, 'Could not reject closure'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Reusable "Request closure" button for staff (shown alongside the normal
+  // inspection actions, for when a client won't do the final inspection).
+  const requestClosureButton = (
+    <Button
+      color="inherit"
+      variant="outlined"
+      onClick={() => {
+        setClosureReason('');
+        setClosureOpen(true);
+      }}
+      disabled={busy}
+    >
+      Request closure
+    </Button>
+  );
+
+  // Shown after an admin has declined a previous closure request.
+  const rejectedNotice =
+    fi && fi.closure_status === 'rejected' ? (
+      <Alert severity="info" variant="outlined" sx={{ width: '100%' }}>
+        A previous closure request was declined
+        {fi.closure_rejection_reason ? `: ${fi.closure_rejection_reason}` : ''}. You can
+        request closure again or run the normal client inspection.
+      </Alert>
+    ) : null;
+
   let content: JSX.Element;
 
   if (fi?.completed) {
@@ -1808,7 +1884,17 @@ function FinalInspectionTab({
               <Typography variant="h6" fontWeight={800}>
                 Final Inspection
               </Typography>
-              <Chip label="Passed" color="success" size="small" />
+              <Stack direction="row" spacing={1} alignItems="center">
+                {fi.closure_status === 'approved' && (
+                  <Chip
+                    label="Internal closure"
+                    color="warning"
+                    size="small"
+                    variant="outlined"
+                  />
+                )}
+                <Chip label="Passed" color="success" size="small" />
+              </Stack>
             </Stack>
             <Divider />
             <Box>
@@ -1832,6 +1918,71 @@ function FinalInspectionTab({
             <Typography variant="caption" color="text.secondary">
               Submitted{fi.completed_at ? ` · ${fmtDate(fi.completed_at)}` : ''}
             </Typography>
+          </Stack>
+        </CardContent>
+      </Card>
+    );
+  } else if (fi && fi.closure_status === 'pending') {
+    // ---- Closure requested — awaiting admin approval ----
+    content = (
+      <Card sx={{ borderColor: 'warning.main' }}>
+        <CardContent>
+          <Stack spacing={2}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="h6" fontWeight={800}>
+                Final Inspection
+              </Typography>
+              <Chip label="Closure pending" color="warning" size="small" />
+            </Stack>
+            <Alert severity="warning" variant="outlined">
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+                Closure requested
+              </Typography>
+              <Typography sx={{ whiteSpace: 'pre-wrap' }}>
+                {fi.closure_reason || 'Client to skip the final inspection.'}
+              </Typography>
+            </Alert>
+            <Typography variant="caption" color="text.secondary">
+              Requested
+              {fi.closure_requested_at ? ` · ${fmtDate(fi.closure_requested_at)}` : ''} ·
+              awaiting admin approval
+            </Typography>
+            <Divider />
+            {isAdmin ? (
+              <>
+                <Typography color="text.secondary">
+                  Approving passes the final inspection internally (no client sign-off)
+                  and moves the job to Completed; the customer review then unlocks.
+                  Rejecting leaves the job exactly where it is.
+                </Typography>
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Button
+                    color="error"
+                    variant="outlined"
+                    onClick={() => {
+                      setRejectReason('');
+                      setRejectOpen(true);
+                    }}
+                    disabled={busy}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={doApproveClosure}
+                    disabled={busy}
+                  >
+                    {busy ? 'Approving…' : 'Approve closure'}
+                  </Button>
+                </Stack>
+              </>
+            ) : (
+              <Typography color="text.secondary">
+                This job is awaiting an administrator's approval to close without a
+                client final inspection.
+              </Typography>
+            )}
           </Stack>
         </CardContent>
       </Card>
@@ -1873,7 +2024,8 @@ function FinalInspectionTab({
                   This returns it to the Inspection stage and re-opens the sign-off
                   form for the client.
                 </Typography>
-                <Stack direction="row" justifyContent="flex-end">
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  {requestClosureButton}
                   <Button
                     variant="contained"
                     color="primary"
@@ -2010,6 +2162,13 @@ function FinalInspectionTab({
                   Last failure: {fi.failure_reason}
                 </Typography>
               )}
+              {rejectedNotice}
+              <Divider sx={{ width: '100%' }} />
+              <Typography variant="body2" color="text.secondary">
+                If the client won't do the final inspection, request closure. An
+                admin approves it and the inspection is passed internally.
+              </Typography>
+              {requestClosureButton}
             </Stack>
           </CardContent>
         </Card>
@@ -2048,9 +2207,17 @@ function FinalInspectionTab({
                   pass it or fail it with a reason; the customer review unlocks only once
                   it passes.
                 </Typography>
-                <Button variant="contained" onClick={openConfirm} disabled={busy}>
-                  {busy ? 'Submitting…' : 'Submit final inspection'}
-                </Button>
+                {rejectedNotice}
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  <Button variant="contained" onClick={openConfirm} disabled={busy}>
+                    {busy ? 'Submitting…' : 'Submit final inspection'}
+                  </Button>
+                  {requestClosureButton}
+                </Stack>
+                <Typography variant="caption" color="text.secondary">
+                  Not every client inspects. If this one won't, use “Request closure” —
+                  an admin approves it and the inspection passes internally.
+                </Typography>
               </>
             )}
           </Stack>
