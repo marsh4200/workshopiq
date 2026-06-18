@@ -144,6 +144,7 @@ async def create_job(
         email=payload.email,
         po_number=payload.po_number,
         eq_number=payload.eq_number,
+        due_date=payload.due_date,
         description=payload.description,
         component_type=payload.component_type,
         status="Received",
@@ -231,6 +232,11 @@ async def update_job(
         value = getattr(payload, field)
         if value is not None:
             setattr(job, field, value)
+
+    # due_date is special: allow explicitly clearing it (sending null) — only
+    # touch it when the client actually included the field in the request.
+    if "due_date" in payload.model_fields_set:
+        job.due_date = payload.due_date
 
     await db.commit()
     detail = await load_job_detail(db, job_id)

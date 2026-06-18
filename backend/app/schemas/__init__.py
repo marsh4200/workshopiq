@@ -1,5 +1,5 @@
 """Pydantic schemas for API I/O."""
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -231,6 +231,7 @@ class JobBase(BaseModel):
     email: Optional[str] = None
     po_number: Optional[str] = None
     eq_number: Optional[str] = None
+    due_date: Optional[date] = None
     description: Optional[str] = None
     component_type: Optional[str] = None
 
@@ -247,6 +248,7 @@ class JobUpdate(BaseModel):
     email: Optional[str] = None
     po_number: Optional[str] = None
     eq_number: Optional[str] = None
+    due_date: Optional[date] = None
     description: Optional[str] = None
     component_type: Optional[str] = None
     status: Optional[str] = None
@@ -373,6 +375,7 @@ class JobListOut(BaseModel):
     component_type: Optional[str] = None
     status: str
     date_received: datetime
+    due_date: Optional[date] = None
     created_at: datetime
 
 

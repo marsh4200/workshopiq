@@ -76,7 +76,7 @@ import {
   rejectClosure,
   apiError,
 } from '../api/client';
-import { StatusBadge, StatusBanner, ClosedBanner, ResultBadge, fmtDate, fmtDay, EmptyState } from '../components/common';
+import { StatusBadge, StatusBanner, ClosedBanner, ResultBadge, fmtDate, fmtDay, dueInfo, EmptyState } from '../components/common';
 import PhotoGallery from '../components/PhotoGallery';
 import ReviewDialog from '../components/ReviewDialog';
 import { useAuth } from '../context/AuthContext';
@@ -343,6 +343,7 @@ function OverviewTab({
     po_number: job.po_number || '',
     eq_number: job.eq_number || '',
     component_type: job.component_type || '',
+    due_date: job.due_date || '',
     description: job.description || '',
   });
   const [saving, setSaving] = useState(false);
@@ -437,6 +438,9 @@ function OverviewTab({
                     ))}
                   </TextField>
                 </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField label="Due Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} helperText="Optional — leave blank to clear" />
+                </Grid>
                 <Grid item xs={12}>
                   <TextField label="Description" fullWidth multiline minRows={3} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
                 </Grid>
@@ -452,6 +456,29 @@ function OverviewTab({
                   <Row label="EQ Number" value={job.eq_number} />
                   <Row label="Component Type" value={job.component_type} />
                   <Row label="Date Received" value={fmtDay(job.date_received)} />
+                  <TableRow>
+                    <TableCell sx={{ border: 0, color: 'text.secondary', width: 160, verticalAlign: 'top' }}>
+                      Due Date
+                    </TableCell>
+                    <TableCell sx={{ border: 0 }}>
+                      {job.due_date ? (
+                        (() => {
+                          const d = dueInfo(
+                            job.due_date,
+                            job.status === 'Completed' || job.status === 'Closed',
+                          );
+                          return (
+                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                              <span>{d.label}</span>
+                              {d.chip && <Chip size="small" color={d.color} label={d.chip} />}
+                            </Stack>
+                          );
+                        })()
+                      ) : (
+                        '—'
+                      )}
+                    </TableCell>
+                  </TableRow>
                   <Row label="Created" value={fmtDate(job.created_at)} />
                   {!readOnly && job.client_names.length > 0 && (
                     <Row label="Client Access" value={job.client_names.join(', ')} />

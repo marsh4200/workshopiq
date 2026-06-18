@@ -38,6 +38,7 @@ export default function NewJob() {
     eq_number: '',
     component_type: '',
     date_received: new Date().toISOString().slice(0, 10),
+    due_date: '',
     description: '',
   });
 
@@ -177,6 +178,17 @@ export default function NewJob() {
               InputLabelProps={{ shrink: true }}
               value={form.date_received}
               onChange={(e) => set('date_received', e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Due Date (optional)"
+              type="date"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              value={form.due_date}
+              onChange={(e) => set('due_date', e.target.value)}
+              helperText="Target / promised completion date"
             />
           </Grid>
           <Grid item xs={12}>

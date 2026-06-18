@@ -27,7 +27,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import { listJobs, fetchMeta, apiError } from '../api/client';
-import { StatusBadge, fmtDay, EmptyState } from '../components/common';
+import { StatusBadge, fmtDay, dueInfo, EmptyState } from '../components/common';
 import { useAuth } from '../context/AuthContext';
 import { useDeviceType } from '../hooks/useDeviceType';
 import type { JobListItem } from '../types';
@@ -141,9 +141,22 @@ export default function Jobs() {
               ) : (
                 <span />
               )}
-              <Typography variant="caption" color="text.secondary">
-                {fmtDay(j.date_received)}
-              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center">
+                {(() => {
+                  const d = dueInfo(j.due_date, j.status === 'Completed' || j.status === 'Closed');
+                  if (d.chip) return <Chip size="small" color={d.color} label={d.chip} />;
+                  if (j.due_date)
+                    return (
+                      <Typography variant="caption" color="text.secondary">
+                        Due {d.label}
+                      </Typography>
+                    );
+                  return null;
+                })()}
+                <Typography variant="caption" color="text.secondary">
+                  {fmtDay(j.date_received)}
+                </Typography>
+              </Stack>
             </Stack>
           </Card>
         ))}
@@ -155,6 +168,7 @@ export default function Jobs() {
             <TableCell>Job #</TableCell>
             <TableCell>Component</TableCell>
             <TableCell>Received</TableCell>
+            <TableCell>Due</TableCell>
             <TableCell>Status</TableCell>
           </TableRow>
         </TableHead>
@@ -175,6 +189,14 @@ export default function Jobs() {
                 )}
               </TableCell>
               <TableCell>{fmtDay(j.date_received)}</TableCell>
+              <TableCell>
+                {(() => {
+                  const d = dueInfo(j.due_date, j.status === 'Completed' || j.status === 'Closed');
+                  if (d.chip) return <Chip size="small" color={d.color} label={d.chip} />;
+                  if (j.due_date) return d.label;
+                  return '—';
+                })()}
+              </TableCell>
               <TableCell>
                 <StatusBadge status={j.status} />
               </TableCell>

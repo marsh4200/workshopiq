@@ -68,6 +68,8 @@ COLUMN_STATEMENTS = (
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS closure_rejection_reason TEXT",
     # Optional EQ number alongside the PO number.
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eq_number VARCHAR(120)",
+    # Optional target/promised completion date.
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS due_date DATE",
 )
 
 # One-off data fixes after the columns exist. Backfill is idempotent (the WHERE

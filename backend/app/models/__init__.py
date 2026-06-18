@@ -1,10 +1,11 @@
 """SQLAlchemy ORM models for WorkshopIQ."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -74,6 +75,8 @@ class Job(Base):
     date_received: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )
+    # Optional target/promised completion date (date only — no time/TZ games).
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     component_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     status: Mapped[str] = mapped_column(String(40), default="Received", index=True)

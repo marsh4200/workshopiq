@@ -83,6 +83,7 @@ export interface JobListItem {
   component_type?: string | null;
   status: string;
   date_received: string;
+  due_date?: string | null;
   created_at: string;
 }
 

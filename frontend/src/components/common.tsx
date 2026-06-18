@@ -146,6 +146,43 @@ export const fmtDate = (s?: string | null) =>
 export const fmtDay = (s?: string | null) =>
   s ? new Date(s).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—';
 
+/** Parse a plain YYYY-MM-DD string as a *local* date (no TZ day-shift). */
+const parseLocalDate = (s: string): Date => {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+
+export type DueState = 'overdue' | 'today' | 'soon' | 'normal' | 'none';
+
+export interface DueInfo {
+  state: DueState;
+  days: number; // signed: negative = overdue, 0 = today, positive = days remaining
+  label: string; // formatted date, e.g. "20 Jun 2026"
+  chip: string | null; // short urgency label, or null when not urgent
+  color: 'error' | 'warning' | 'default';
+}
+
+/**
+ * Due-date status used for the date chips/colours. Passing `done = true`
+ * (Completed/Closed jobs) suppresses the urgency chip — the work is finished,
+ * so a past due date is no longer a problem.
+ */
+export function dueInfo(due?: string | null, done = false): DueInfo {
+  if (!due) return { state: 'none', days: 0, label: '—', chip: null, color: 'default' };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = parseLocalDate(due);
+  target.setHours(0, 0, 0, 0);
+  const days = Math.round((target.getTime() - today.getTime()) / 86400000);
+  const label = target.toLocaleDateString(undefined, { dateStyle: 'medium' });
+  if (done) return { state: 'normal', days, label, chip: null, color: 'default' };
+  if (days < 0)
+    return { state: 'overdue', days, label, chip: `Overdue ${Math.abs(days)}d`, color: 'error' };
+  if (days === 0) return { state: 'today', days, label, chip: 'Due today', color: 'warning' };
+  if (days <= 3) return { state: 'soon', days, label, chip: `Due in ${days}d`, color: 'warning' };
+  return { state: 'normal', days, label, chip: null, color: 'default' };
+}
+
 /** Monospace serial/job number — the design signature. */
 export function Serial({ children, sx }: { children: ReactNode; sx?: object }) {
   return (
