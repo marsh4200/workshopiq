@@ -3,6 +3,8 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   Stack,
@@ -30,6 +32,7 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -38,7 +41,7 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const { must_change_password } = await login(username, password);
+      const { must_change_password } = await login(username, password, remember);
       navigate(must_change_password ? '/change-password' : '/', { replace: true });
     } catch (err) {
       setError(apiError(err, 'Login failed'));
@@ -175,13 +178,30 @@ export default function Login() {
               }}
             />
 
+            <FormControlLabel
+              sx={{ mt: 1.5, ml: 0 }}
+              control={
+                <Checkbox
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  size="small"
+                  sx={{ py: 0.5 }}
+                />
+              }
+              label={
+                <Typography variant="body2" color="text.secondary">
+                  Keep me signed in on this device
+                </Typography>
+              }
+            />
+
             <Button
               type="submit"
               variant="contained"
               fullWidth
               size="large"
               disabled={loading || !username || !password}
-              sx={{ mt: 3, py: 1.2 }}
+              sx={{ mt: 2, py: 1.2 }}
             >
               {loading ? 'Signing in…' : 'Sign in'}
             </Button>

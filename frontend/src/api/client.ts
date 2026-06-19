@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getToken, clearToken } from './token';
 import type {
   AppSettings,
   CheckinStatus,
@@ -30,7 +31,7 @@ import type {
 const api = axios.create({ baseURL: '/api', timeout: 30000 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('wiq_token');
+  const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -39,7 +40,7 @@ api.interceptors.response.use(
   (r) => r,
   (error) => {
     if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
-      localStorage.removeItem('wiq_token');
+      clearToken();
       if (!window.location.pathname.includes('/login')) window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -138,7 +139,7 @@ export const uploadDocuments = async (jobId: number, files: File[]) => {
 export const deleteDocument = (jobId: number, docId: number) =>
   api.delete(`/jobs/${jobId}/documents/${docId}`);
 export const fileUrl = (jobId: number, filename: string) => {
-  const token = localStorage.getItem('wiq_token');
+  const token = getToken();
   return `/api/jobs/${jobId}/files/${filename}?_t=${token}`;
 };
 export const fetchFileBlob = async (jobId: number, filename: string) => {

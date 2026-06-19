@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import * as apiClient from '../api/client';
+import { getToken, setToken, clearToken } from '../api/token';
 import type { User } from '../types';
 
 interface AuthCtx {
   user: User | null;
   loading: boolean;
-  login: (u: string, p: string) => Promise<{ must_change_password: boolean }>;
+  login: (u: string, p: string, remember?: boolean) => Promise<{ must_change_password: boolean }>;
   logout: () => void;
   refresh: () => Promise<void>;
   isAdmin: boolean;
@@ -20,7 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = async () => {
-    const token = localStorage.getItem('wiq_token');
+    const token = getToken();
     if (!token) {
       setUser(null);
       setLoading(false);
@@ -29,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setUser(await apiClient.fetchMe());
     } catch {
-      localStorage.removeItem('wiq_token');
+      clearToken();
       setUser(null);
     } finally {
       setLoading(false);
@@ -40,15 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refresh();
   }, []);
 
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string, remember = true) => {
     const res = await apiClient.login(username, password);
-    localStorage.setItem('wiq_token', res.access_token);
+    setToken(res.access_token, remember);
     await refresh();
     return { must_change_password: res.must_change_password };
   };
 
   const logout = () => {
-    localStorage.removeItem('wiq_token');
+    clearToken();
     setUser(null);
     window.location.href = '/login';
   };
