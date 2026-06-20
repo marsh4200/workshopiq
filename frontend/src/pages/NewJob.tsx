@@ -65,15 +65,19 @@ export default function NewJob() {
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  // Selecting a known customer pre-fills any contact fields left blank, so
-  // repeat customers don't have to be retyped on a phone.
+  // Selecting a known customer loads that customer's details. Picking a
+  // *different* customer must fully replace the previous one's contact info
+  // (not keep stale fields from an earlier, mistaken pick) — so these overwrite
+  // rather than only filling blanks. Fields the customer has no value for are
+  // cleared, so the form always reflects exactly who is selected. Typing a new
+  // free-text name doesn't trigger this, so manual entry is never clobbered.
   const applyCustomer = (c: Customer) =>
     setForm((f) => ({
       ...f,
       customer_name: c.name,
-      contact_person: f.contact_person || c.contact_person || '',
-      phone: f.phone || c.phone || '',
-      email: f.email || c.email || '',
+      contact_person: c.contact_person || '',
+      phone: c.phone || '',
+      email: c.email || '',
     }));
 
   const clientLabel = (c: User) => c.full_name || c.username;
