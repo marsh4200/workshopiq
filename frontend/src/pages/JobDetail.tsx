@@ -45,6 +45,7 @@ import QrCode2Icon from '@mui/icons-material/QrCode2';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PrintIcon from '@mui/icons-material/Print';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import {
   getJob,
   updateJob,
@@ -74,17 +75,63 @@ import {
   requestClosure,
   approveClosure,
   rejectClosure,
+  logWhatsapp,
   apiError,
 } from '../api/client';
 import { StatusBadge, StatusBanner, ClosedBanner, ResultBadge, fmtDate, fmtDay, dueInfo, EmptyState } from '../components/common';
 import PhotoGallery from '../components/PhotoGallery';
 import ReviewDialog from '../components/ReviewDialog';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { useDeviceType } from '../hooks/useDeviceType';
 import type { CheckinStatus, Inspection, JobDetail as JobDetailT, JobCostItem, Review, User } from '../types';
 
 const zarFmt = new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' });
 const fmtMoney = (n: number) => zarFmt.format(Number.isFinite(n) ? n : 0);
+
+/**
+ * Normalise a phone number to bare international digits for a wa.me link.
+ * Leading "0" is swapped for the configured country code; "+"/"00" prefixes
+ * are stripped. Returns "" if there's nothing usable.
+ */
+function normalizeMsisdn(raw?: string | null, countryCode = '27'): string {
+  let d = (raw || '').replace(/[^\d+]/g, '');
+  const cc = (countryCode || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('+')) d = d.slice(1);
+  else if (d.startsWith('00')) d = d.slice(2);
+  else if (d.startsWith('0')) d = cc + d.slice(1);
+  else if (cc && !d.startsWith(cc)) d = cc + d;
+  return d;
+}
+
+/** Compose a status-aware WhatsApp message for a customer. */
+function whatsappMessage(job: JobDetailT, company: string, origin: string): string {
+  const who = job.contact_person || job.customer_name || 'there';
+  const head = `Hi ${who}, this is ${company}.`;
+  let line: string;
+  switch (job.status) {
+    case 'Completed':
+    case 'Awaiting Customer Review':
+      line = `Your job ${job.job_number} is complete and ready for collection.`;
+      break;
+    case 'Inspection':
+      line = `Your job ${job.job_number} has moved to final inspection.`;
+      break;
+    case 'Inspection Failed':
+      line = `Your job ${job.job_number} needs rework after inspection — we'll keep you posted.`;
+      break;
+    case 'Machining':
+      line = `Your job ${job.job_number} is now in production.`;
+      break;
+    case 'Closed':
+      line = `Your job ${job.job_number} is now closed. Thank you for your business.`;
+      break;
+    default:
+      line = `We've received your job ${job.job_number} and it's now logged.`;
+  }
+  return `${head} ${line}\nTrack progress: ${origin}`;
+}
 
 const NOTE_TYPES = [
   { value: 'internal', label: 'Internal' },
@@ -334,6 +381,7 @@ function OverviewTab({
   setError: (s: string) => void;
 }) {
   const { isAdmin } = useAuth();
+  const { settings } = useSettings();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     customer_name: job.customer_name,
@@ -357,6 +405,21 @@ function OverviewTab({
     } catch (e) {
       setError(apiError(e, 'Failed to update status'));
     }
+  };
+
+  const notifyWhatsapp = () => {
+    const cc = settings?.whatsapp_country_code || '27';
+    const num = normalizeMsisdn(job.phone, cc);
+    if (!num) {
+      setError('No usable phone number on this job to message.');
+      return;
+    }
+    const company = settings?.company_name || 'WorkshopIQ';
+    const text = whatsappMessage(job, company, window.location.origin);
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    logWhatsapp(job.id)
+      .then(() => onUpdate())
+      .catch(() => undefined);
   };
 
   const saveDetails = async () => {
@@ -538,6 +601,23 @@ function OverviewTab({
               </Stack>
             )}
             <Divider sx={{ my: 2 }} />
+            {!readOnly && job.phone && (
+              <Button
+                fullWidth
+                variant="contained"
+                startIcon={<WhatsAppIcon />}
+                onClick={notifyWhatsapp}
+                sx={{
+                  mb: 2,
+                  bgcolor: '#25D366',
+                  color: '#0b3d2e',
+                  fontWeight: 700,
+                  '&:hover': { bgcolor: '#1da851' },
+                }}
+              >
+                Notify on WhatsApp
+              </Button>
+            )}
             <Stack spacing={1}>
               <Stat label="Inspections" value={job.inspections.length} />
               <Stat label="Photos" value={job.photos.length} />

@@ -100,6 +100,7 @@ export default function Settings() {
         email_port: s.email_port,
         email_user: s.email_user,
         email_from: s.email_from,
+        whatsapp_country_code: s.whatsapp_country_code,
         github_repo_url: s.github_repo_url,
       };
       const updated = await updateSettings(body);
@@ -350,6 +351,23 @@ export default function Settings() {
               fullWidth
               value={s.email_from || ''}
               onChange={(e) => set('email_from', e.target.value)}
+            />
+          </Grid>
+        </Grid>
+      </Section>
+
+      <Section
+        title="WhatsApp Notifications"
+        subtitle="Default country code used to build wa.me links when notifying a customer from a job."
+      >
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Default Country Code"
+              fullWidth
+              value={s.whatsapp_country_code || ''}
+              onChange={(e) => set('whatsapp_country_code', e.target.value.replace(/\D/g, ''))}
+              helperText="Digits only, no +. South Africa is 27."
             />
           </Grid>
         </Grid>

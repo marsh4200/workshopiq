@@ -18,6 +18,7 @@ DEFAULTS = {
     "email_user": "",
     "email_password": "",
     "email_from": "",
+    "whatsapp_country_code": "27",
     "github_repo_url": "https://github.com/marsh4200/workshopiq",
     "current_version": app_settings.APP_VERSION,
     "available_version": "",

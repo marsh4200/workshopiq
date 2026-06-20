@@ -243,6 +243,28 @@ async def update_job(
     return serialize_detail(detail)
 
 
+@router.post("/{job_id}/whatsapp-log", response_model=JobDetailOut)
+async def log_whatsapp(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+):
+    """Record that a staff member sent a WhatsApp update to the customer.
+
+    The message itself is composed and opened client-side (a wa.me link), so
+    this endpoint just leaves an audit trail on the job timeline.
+    """
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    await log_event(
+        db, job.id, "whatsapp", "WhatsApp update sent to customer", user
+    )
+    await db.commit()
+    detail = await load_job_detail(db, job_id)
+    return serialize_detail(detail)
+
+
 @router.delete("/{job_id}", status_code=204)
 async def delete_job(
     job_id: int,

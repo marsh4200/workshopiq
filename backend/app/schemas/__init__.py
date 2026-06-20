@@ -62,6 +62,7 @@ class SettingsOut(BaseModel):
     email_port: Optional[str] = None
     email_user: Optional[str] = None
     email_from: Optional[str] = None
+    whatsapp_country_code: Optional[str] = None
     github_repo_url: Optional[str] = None
     current_version: str
     available_version: Optional[str] = None
@@ -76,6 +77,7 @@ class SettingsUpdate(BaseModel):
     email_user: Optional[str] = None
     email_password: Optional[str] = None
     email_from: Optional[str] = None
+    whatsapp_country_code: Optional[str] = None
     github_repo_url: Optional[str] = None
 
 

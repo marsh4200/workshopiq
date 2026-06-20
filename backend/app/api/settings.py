@@ -29,6 +29,7 @@ async def _build_settings_out(db: AsyncSession) -> SettingsOut:
         email_port=s.get("email_port") or None,
         email_user=s.get("email_user") or None,
         email_from=s.get("email_from") or None,
+        whatsapp_country_code=s.get("whatsapp_country_code") or "27",
         github_repo_url=s.get("github_repo_url") or None,
         current_version=s.get("current_version", app_settings.APP_VERSION),
         available_version=s.get("available_version") or None,

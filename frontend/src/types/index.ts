@@ -153,6 +153,7 @@ export interface AppSettings {
   email_port?: string | null;
   email_user?: string | null;
   email_from?: string | null;
+  whatsapp_country_code?: string | null;
   github_repo_url?: string | null;
   current_version: string;
   available_version?: string | null;

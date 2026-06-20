@@ -121,6 +121,9 @@ export const getCheckin = async (jobId: number) =>
 export const addNote = async (jobId: number, note_type: string, body: string) =>
   (await api.post<Note>(`/jobs/${jobId}/notes`, { note_type, body })).data;
 
+export const logWhatsapp = async (jobId: number) =>
+  (await api.post<JobDetail>(`/jobs/${jobId}/whatsapp-log`, {})).data;
+
 // Photos & documents
 export const uploadPhotos = async (
   jobId: number,
