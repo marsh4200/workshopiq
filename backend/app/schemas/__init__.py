@@ -377,6 +377,8 @@ class JobListOut(BaseModel):
     date_received: datetime
     due_date: Optional[date] = None
     created_at: datetime
+    po_number: Optional[str] = None
+    eq_number: Optional[str] = None
 
 
 class JobDetailOut(JobListOut):
@@ -399,6 +401,14 @@ class JobDetailOut(JobListOut):
 
 class AssignClientsRequest(BaseModel):
     user_ids: list[int]
+
+
+# ---------- Customer directory (derived from jobs) ----------
+class CustomerOut(BaseModel):
+    name: str
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
 
 
 # ---------- Job costing (staff/admin only) ----------
@@ -457,6 +467,8 @@ class DashboardStats(BaseModel):
     completed: int
     closed: int
     total: int
+    overdue: int = 0
+    due_soon: int = 0
     status_breakdown: dict[str, int]
     recent_activity: list[RecentActivityOut]
 

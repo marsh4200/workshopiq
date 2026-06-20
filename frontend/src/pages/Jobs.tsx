@@ -61,6 +61,8 @@ export default function Jobs() {
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const statusFilter = params.get('status') || '';
+  // Optional due-date lens, set by the dashboard tiles: 'overdue' | 'soon'.
+  const dueFilter = params.get('due') || '';
 
   useEffect(() => {
     fetchMeta()
@@ -77,15 +79,27 @@ export default function Jobs() {
   }, [statusFilter]);
 
   const filtered = useMemo(() => {
+    let list = jobs;
+    // Due lens first (driven by the dashboard tiles).
+    if (dueFilter === 'overdue' || dueFilter === 'soon') {
+      list = list.filter((j) => {
+        const done = j.status === 'Completed' || j.status === 'Closed';
+        if (done || !j.due_date) return false;
+        const { days } = dueInfo(j.due_date, done);
+        return dueFilter === 'overdue' ? days < 0 : days >= 0 && days <= 7;
+      });
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return jobs;
-    return jobs.filter(
+    if (!q) return list;
+    return list.filter(
       (j) =>
         j.job_number.toLowerCase().includes(q) ||
         j.customer_name.toLowerCase().includes(q) ||
-        (j.component_type || '').toLowerCase().includes(q),
+        (j.component_type || '').toLowerCase().includes(q) ||
+        (j.po_number || '').toLowerCase().includes(q) ||
+        (j.eq_number || '').toLowerCase().includes(q),
     );
-  }, [jobs, search]);
+  }, [jobs, search, dueFilter]);
 
   // Group jobs into one folder per customer, alphabetical by name.
   const groups = useMemo<CustomerGroup[]>(() => {
@@ -118,6 +132,11 @@ export default function Jobs() {
   const setStatus = (s: string) => {
     if (s) params.set('status', s);
     else params.delete('status');
+    setParams(params, { replace: true });
+  };
+
+  const clearDue = () => {
+    params.delete('due');
     setParams(params, { replace: true });
   };
 
@@ -231,7 +250,7 @@ export default function Jobs() {
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
         <TextField
-          placeholder="Search by job number, customer, component…"
+          placeholder="Search by job number, customer, component, PO or EQ…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           fullWidth
@@ -258,6 +277,21 @@ export default function Jobs() {
           ))}
         </TextField>
       </Stack>
+
+      {dueFilter && (
+        <Stack direction="row" sx={{ mb: 2 }}>
+          <Chip
+            color={dueFilter === 'overdue' ? 'error' : 'warning'}
+            variant="outlined"
+            label={
+              dueFilter === 'overdue'
+                ? 'Showing overdue jobs'
+                : 'Showing jobs due within 7 days'
+            }
+            onDelete={clearDue}
+          />
+        </Stack>
+      )}
 
       {!loading && !error && groups.length > 0 && (
         <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
@@ -286,7 +320,11 @@ export default function Jobs() {
             icon={<WorkOutlineIcon sx={{ fontSize: 48, opacity: 0.4 }} />}
             title="No jobs found"
             subtitle={
-              statusFilter
+              dueFilter === 'overdue'
+                ? 'No overdue jobs — nicely on top of it.'
+                : dueFilter === 'soon'
+                ? 'Nothing due in the next 7 days.'
+                : statusFilter
                 ? `No jobs with status "${statusFilter}".`
                 : 'Create your first job to get started.'
             }

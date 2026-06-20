@@ -11,6 +11,7 @@ from app.api import (
     backup,
     checkin,
     costing,
+    customers,
     dashboard,
     final_inspection,
     jobs,
@@ -60,7 +61,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (auth, users, jobs, costing, templates, dashboard, settings_api, checkin, reports, reviews, final_inspection, ncr, backup, samba):
+for r in (auth, users, jobs, costing, customers, templates, dashboard, settings_api, checkin, reports, reviews, final_inspection, ncr, backup, samba):
     app.include_router(r.router, prefix=settings.API_PREFIX)
 
 

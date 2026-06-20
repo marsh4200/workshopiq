@@ -3,6 +3,7 @@ import { getToken, clearToken } from './token';
 import type {
   AppSettings,
   CheckinStatus,
+  Customer,
   DashboardStats,
   FinalInspection,
   Inspection,
@@ -80,6 +81,10 @@ export const deleteUser = (id: number) => api.delete(`/users/${id}`);
 // Meta
 export const fetchMeta = async () =>
   (await api.get<{ component_types: string[]; statuses: string[] }>('/templates/meta')).data;
+
+// Customer directory (derived from existing jobs — powers intake autocomplete)
+export const listCustomers = async (q?: string) =>
+  (await api.get<Customer[]>('/customers', { params: q ? { q } : {} })).data;
 
 // Jobs
 export const listJobs = async (status?: string) =>

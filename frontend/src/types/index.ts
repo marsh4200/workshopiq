@@ -85,6 +85,8 @@ export interface JobListItem {
   date_received: string;
   due_date?: string | null;
   created_at: string;
+  po_number?: string | null;
+  eq_number?: string | null;
 }
 
 export interface JobCostItem {
@@ -190,8 +192,17 @@ export interface DashboardStats {
   completed: number;
   closed: number;
   total: number;
+  overdue: number;
+  due_soon: number;
   status_breakdown: Record<string, number>;
   recent_activity: RecentActivity[];
+}
+
+export interface Customer {
+  name: string;
+  contact_person?: string | null;
+  phone?: string | null;
+  email?: string | null;
 }
 
 export interface JobReportItem {

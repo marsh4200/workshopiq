@@ -14,6 +14,8 @@ import InboxIcon from '@mui/icons-material/MoveToInbox';
 import BuildIcon from '@mui/icons-material/Construction';
 import CheckCircleIcon from '@mui/icons-material/TaskAlt';
 import ArchiveIcon from '@mui/icons-material/Inventory2';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import EventIcon from '@mui/icons-material/Event';
 import HistoryIcon from '@mui/icons-material/History';
 import TrendingFlatIcon from '@mui/icons-material/ArrowOutward';
 import { BarChart } from '@mui/x-charts/BarChart';
@@ -30,6 +32,12 @@ const STAT_DEFS = [
   { key: 'machining', label: 'Machining', icon: <BuildIcon />, color: '#6366f1', filter: 'Machining' },
   { key: 'completed', label: 'Completed', icon: <CheckCircleIcon />, color: '#22c55e', filter: 'Completed' },
   { key: 'closed', label: 'Closed', icon: <ArchiveIcon />, color: '#64748b', filter: 'Closed' },
+] as const;
+
+// Due-date attention tiles. These link to the jobs list with a due lens.
+const DUE_DEFS = [
+  { key: 'overdue', label: 'Overdue', icon: <WarningAmberIcon />, color: '#ef4444', due: 'overdue' },
+  { key: 'due_soon', label: 'Due this week', icon: <EventIcon />, color: '#f59e0b', due: 'soon' },
 ] as const;
 
 function greeting() {
@@ -104,6 +112,57 @@ export default function Dashboard() {
                     </Box>
                     <Box sx={{ minWidth: 0 }}>
                       <Typography sx={{ fontFamily: fontMono, fontWeight: 700, fontSize: 30, lineHeight: 1 }}>
+                        {value}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" noWrap>
+                        {d.label}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            </Grid>
+          );
+        })}
+
+        {DUE_DEFS.map((d) => {
+          const value = stats ? (stats as any)[d.key] : 0;
+          const active = value > 0;
+          return (
+            <Grid item xs={6} lg={3} key={d.key}>
+              <Card
+                sx={{
+                  ...(active ? { borderColor: `${d.color}66` } : {}),
+                  '&:hover': { borderColor: `${d.color}66`, transform: 'translateY(-2px)' },
+                }}
+              >
+                <CardActionArea onClick={() => navigate(`/jobs?due=${d.due}`)}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box
+                      sx={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: 2.5,
+                        display: 'grid',
+                        placeItems: 'center',
+                        bgcolor: `${d.color}1f`,
+                        color: d.color,
+                        border: `1px solid ${d.color}3d`,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {d.icon}
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          fontFamily: fontMono,
+                          fontWeight: 700,
+                          fontSize: 30,
+                          lineHeight: 1,
+                          color: active ? d.color : 'text.primary',
+                        }}
+                      >
                         {value}
                       </Typography>
                       <Typography variant="body2" color="text.secondary" noWrap>

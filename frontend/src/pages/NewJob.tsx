@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -17,15 +18,16 @@ import {
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { createJob, fetchMeta, listClients, apiError } from '../api/client';
+import { createJob, fetchMeta, listClients, listCustomers, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import type { User } from '../types';
+import type { Customer, User } from '../types';
 
 export default function NewJob() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const [componentTypes, setComponentTypes] = useState<string[]>([]);
   const [clients, setClients] = useState<User[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [clientIds, setClientIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -49,6 +51,12 @@ export default function NewJob() {
   }, []);
 
   useEffect(() => {
+    listCustomers()
+      .then(setCustomers)
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     if (!isAdmin) return;
     listClients()
       .then(setClients)
@@ -56,6 +64,17 @@ export default function NewJob() {
   }, [isAdmin]);
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Selecting a known customer pre-fills any contact fields left blank, so
+  // repeat customers don't have to be retyped on a phone.
+  const applyCustomer = (c: Customer) =>
+    setForm((f) => ({
+      ...f,
+      customer_name: c.name,
+      contact_person: f.contact_person || c.contact_person || '',
+      phone: f.phone || c.phone || '',
+      email: f.email || c.email || '',
+    }));
 
   const clientLabel = (c: User) => c.full_name || c.username;
   const handleClientChange = (e: SelectChangeEvent<number[]>) => {
@@ -104,12 +123,38 @@ export default function NewJob() {
       <Card sx={{ p: { xs: 2, sm: 3 } }}>
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
-            <TextField
-              label="Customer Name"
-              required
-              fullWidth
-              value={form.customer_name}
-              onChange={(e) => set('customer_name', e.target.value)}
+            <Autocomplete
+              freeSolo
+              options={customers}
+              getOptionLabel={(o) => (typeof o === 'string' ? o : o.name)}
+              inputValue={form.customer_name}
+              onInputChange={(_, v) => set('customer_name', v)}
+              onChange={(_, v) => {
+                if (v && typeof v !== 'string') applyCustomer(v);
+              }}
+              renderOption={(props, o) => (
+                <li {...props} key={o.name}>
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>
+                      {o.name}
+                    </Typography>
+                    {(o.contact_person || o.phone) && (
+                      <Typography variant="caption" color="text.secondary">
+                        {[o.contact_person, o.phone].filter(Boolean).join(' · ')}
+                      </Typography>
+                    )}
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Customer Name"
+                  required
+                  fullWidth
+                  helperText="Pick an existing customer to auto-fill their details, or type a new one"
+                />
+              )}
             />
           </Grid>
           <Grid item xs={12} sm={6}>

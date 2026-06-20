@@ -1,4 +1,6 @@
 """Dashboard statistics endpoint."""
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +13,12 @@ from app.schemas import DashboardStats, RecentActivityOut
 from app.services.templates_data import JOB_STATUSES
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+# Statuses where the workshop's work is finished, so an unmet due date no
+# longer counts as overdue. Kept in sync with the jobs list chips on the
+# frontend (Completed / Closed).
+DONE_STATUSES = ("Completed", "Closed")
+DUE_SOON_DAYS = 7
 
 
 @router.get("", response_model=DashboardStats)
@@ -38,6 +46,28 @@ async def dashboard(
     machining = counts.get("Machining", 0)
     completed = counts.get("Completed", 0)
     closed = counts.get("Closed", 0)
+
+    # Due-date health: jobs that are past / approaching their promised date and
+    # not yet finished. Respects the same client scoping as everything else.
+    today = date.today()
+    soon_cutoff = today + timedelta(days=DUE_SOON_DAYS)
+    active_due = [
+        Job.due_date.is_not(None),
+        Job.status.not_in(DONE_STATUSES),
+        *job_filter,
+    ]
+    overdue = (
+        await db.execute(
+            select(func.count()).select_from(Job).where(*active_due, Job.due_date < today)
+        )
+    ).scalar() or 0
+    due_soon = (
+        await db.execute(
+            select(func.count())
+            .select_from(Job)
+            .where(*active_due, Job.due_date >= today, Job.due_date <= soon_cutoff)
+        )
+    ).scalar() or 0
 
     activity_query = (
         select(TimelineEvent)
@@ -70,6 +100,8 @@ async def dashboard(
         completed=completed,
         closed=closed,
         total=total,
+        overdue=overdue,
+        due_soon=due_soon,
         status_breakdown=status_breakdown,
         recent_activity=recent,
     )
