@@ -158,6 +158,22 @@ export const fetchFileBlob = async (jobId: number, filename: string) => {
   return URL.createObjectURL(data);
 };
 
+// Branded job certificate / report (PDF). Streams a real application/pdf and
+// triggers a browser download. Works for staff/admin and for clients on jobs
+// they have access to.
+export const downloadCertificate = async (jobId: number, jobNumber: string, passed: boolean) => {
+  const res = await api.get(`/jobs/${jobId}/certificate`, { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  const safe = jobNumber.replace(/[/ ]/g, '_');
+  a.download = `${safe}_${passed ? 'Certificate' : 'Report'}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
 // Inspections
 export const createInspection = async (jobId: number, component_type: string, title?: string) =>
   (await api.post<Inspection>(`/jobs/${jobId}/inspections`, { component_type, title })).data;

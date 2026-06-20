@@ -1,7 +1,7 @@
 """Job lifecycle endpoints: jobs, notes, photos, documents, inspections."""
 import secrets
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,7 @@ from app.models import (
     InspectionTemplate,
     Job,
     JobCheckin,
+    NCR,
     Note,
     Photo,
     TimelineEvent,
@@ -38,7 +39,8 @@ from app.schemas import (
     PhotoOut,
 )
 from app.services import file_service
-from app.services.settings_service import next_job_number
+from app.services.certificate_service import build_job_certificate
+from app.services.settings_service import get_setting, next_job_number
 from app.services.templates_data import JOB_STATUSES
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -456,6 +458,57 @@ async def serve_file(
     if not path.exists() or not filename.startswith(f"job{job_id}_"):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(path)
+
+
+# ---------------- Certificate / Job report (PDF) ----------------
+@router.get("/{job_id}/certificate")
+async def job_certificate(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Branded PDF for a job.
+
+    Renders a Certificate of Conformance when the job's final inspection has
+    passed, otherwise a neutral Job Report. Clients can download the document
+    for any job they have access to (it's their deliverable); staff/admin for
+    any job. Returns a real application/pdf payload — no headless browser.
+    """
+    result = await db.execute(
+        select(Job)
+        .options(
+            selectinload(Job.inspections).selectinload(Inspection.items),
+            selectinload(Job.final_inspection).selectinload(
+                FinalInspection.attempts_log
+            ),
+            selectinload(Job.ncrs),
+        )
+        .where(Job.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    await assert_can_view(db, job, user)
+
+    company = await get_setting(db, "company_name") or "WorkshopIQ"
+    logo_path = None
+    logo_name = await get_setting(db, "company_logo")
+    if logo_name:
+        candidate = file_service.file_path(logo_name)
+        if candidate.exists():
+            logo_path = candidate
+
+    pdf = build_job_certificate(job, company, logo_path)
+
+    passed = bool(job.final_inspection and job.final_inspection.result == "passed")
+    kind = "Certificate" if passed else "Report"
+    safe_no = job.job_number.replace("/", "-").replace(" ", "_")
+    filename = f"{safe_no}_{kind}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------- Inspections ----------------

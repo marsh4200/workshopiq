@@ -76,6 +76,7 @@ import {
   approveClosure,
   rejectClosure,
   logWhatsapp,
+  downloadCertificate,
   apiError,
 } from '../api/client';
 import { StatusBadge, StatusBanner, ClosedBanner, ResultBadge, fmtDate, fmtDay, dueInfo, EmptyState } from '../components/common';
@@ -422,6 +423,19 @@ function OverviewTab({
       .catch(() => undefined);
   };
 
+  const [certBusy, setCertBusy] = useState(false);
+  const certPassed = job.final_inspection?.result === 'passed';
+  const handleCertificate = async () => {
+    setCertBusy(true);
+    try {
+      await downloadCertificate(job.id, job.job_number, certPassed);
+    } catch (e) {
+      setError(apiError(e, 'Failed to generate the document'));
+    } finally {
+      setCertBusy(false);
+    }
+  };
+
   const saveDetails = async () => {
     setSaving(true);
     try {
@@ -618,6 +632,20 @@ function OverviewTab({
                 Notify on WhatsApp
               </Button>
             )}
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleCertificate}
+              disabled={certBusy}
+              sx={{ mb: 2 }}
+            >
+              {certBusy
+                ? 'Generating…'
+                : certPassed
+                ? 'Download Certificate'
+                : 'Download Job Report'}
+            </Button>
             <Stack spacing={1}>
               <Stat label="Inspections" value={job.inspections.length} />
               <Stat label="Photos" value={job.photos.length} />
