@@ -44,6 +44,11 @@ class User(Base):
     # Stored server-side so each person's choice follows them across every
     # device they sign in on (phone, tablet, desktop).
     theme_preference: Mapped[str] = mapped_column(String(10), default="dark")
+    # Timestamp of the user's most recent successful login. Null until they
+    # have signed in at least once. Stamped on every successful /auth/login.
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     job_access: Mapped[list["ClientJobAccess"]] = relationship(

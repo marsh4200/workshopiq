@@ -31,7 +31,7 @@ import {
   deleteUser,
   apiError,
 } from '../api/client';
-import { fmtDay } from '../components/common';
+import { fmtDate, fmtDay } from '../components/common';
 import { useAuth } from '../context/AuthContext';
 import type { Role, User } from '../types';
 
@@ -156,6 +156,7 @@ export default function Users() {
               <TableCell>Email</TableCell>
               <TableCell>Role</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell>Last login</TableCell>
               <TableCell>Created</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -186,6 +187,7 @@ export default function Users() {
                     variant={u.is_active ? 'filled' : 'outlined'}
                   />
                 </TableCell>
+                <TableCell>{u.last_login_at ? fmtDate(u.last_login_at) : 'Never'}</TableCell>
                 <TableCell>{fmtDay(u.created_at)}</TableCell>
                 <TableCell align="right">
                   <Tooltip title="Edit">

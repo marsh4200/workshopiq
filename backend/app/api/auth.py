@@ -11,7 +11,7 @@ from app.core.security import (
     hash_password_async,
     verify_password_async,
 )
-from app.models import User
+from app.models import User, utcnow
 from app.schemas import ChangePasswordRequest, PreferencesUpdate, Token, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -36,6 +36,11 @@ async def login(
         )
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is disabled")
+
+    # Record this successful sign-in so admins can see who's active and when
+    # each client/staff member last used the system.
+    user.last_login_at = utcnow()
+    await db.commit()
 
     token = create_access_token(user.id, user.role)
     return Token(

@@ -72,6 +72,8 @@ COLUMN_STATEMENTS = (
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS due_date DATE",
     # Per-user appearance preference (light / dark / system).
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(10) NOT NULL DEFAULT 'dark'",
+    # Most recent successful login timestamp (null until first sign-in).
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ",
 )
 
 # One-off data fixes after the columns exist. Backfill is idempotent (the WHERE

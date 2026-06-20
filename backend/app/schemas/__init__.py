@@ -50,6 +50,7 @@ class UserOut(UserBase):
     id: int
     must_change_password: bool
     theme_preference: str = "dark"
+    last_login_at: Optional[datetime] = None
     created_at: datetime
 
 

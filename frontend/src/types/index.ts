@@ -9,6 +9,7 @@ export interface User {
   is_active: boolean;
   must_change_password: boolean;
   theme_preference?: 'light' | 'dark' | 'system';
+  last_login_at?: string | null;
   created_at: string;
 }
 
