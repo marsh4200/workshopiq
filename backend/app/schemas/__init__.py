@@ -49,7 +49,13 @@ class UserOut(UserBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     must_change_password: bool
+    theme_preference: str = "dark"
     created_at: datetime
+
+
+class PreferencesUpdate(BaseModel):
+    """Self-service preference update — any authenticated user may set their own."""
+    theme_preference: str
 
 
 # ---------- Settings ----------

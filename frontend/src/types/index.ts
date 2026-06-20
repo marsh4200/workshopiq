@@ -8,6 +8,7 @@ export interface User {
   role: Role;
   is_active: boolean;
   must_change_password: boolean;
+  theme_preference?: 'light' | 'dark' | 'system';
   created_at: string;
 }
 

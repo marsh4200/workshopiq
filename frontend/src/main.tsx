@@ -1,24 +1,23 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { ThemeProvider, CssBaseline } from '@mui/material';
-import { theme } from './theme/theme';
 import { AuthProvider } from './context/AuthContext';
 import { SettingsProvider } from './context/SettingsContext';
+import { ThemeModeProvider } from './context/ThemeModeContext';
 import App from './App';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <BrowserRouter>
-        <AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        {/* Theme lives inside auth so it can adopt each user's stored choice. */}
+        <ThemeModeProvider>
           <SettingsProvider>
             <App />
           </SettingsProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </ThemeProvider>
+        </ThemeModeProvider>
+      </AuthProvider>
+    </BrowserRouter>
   </React.StrictMode>,
 );

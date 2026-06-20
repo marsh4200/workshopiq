@@ -2,15 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
+/* Body background, color-scheme and scrollbar-thumb colour are driven by the
+   active MUI theme (see theme/theme.ts -> MuiCssBaseline) so they follow each
+   user's light/dark choice. Only mode-agnostic rules live here. */
 html, body, #root { height: 100%; margin: 0; }
 
 body {
-  background-color: #0a0e16;
-  background-image:
-    radial-gradient(1100px 760px at 88% -12%, rgba(37, 99, 235, 0.16) 0%, transparent 60%),
-    radial-gradient(900px 640px at -8% 8%, rgba(34, 211, 238, 0.08) 0%, transparent 55%);
-  background-attachment: fixed;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -19,13 +16,6 @@ body {
 * { box-sizing: border-box; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb {
-  background: #283656;
-  border-radius: 8px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-::-webkit-scrollbar-thumb:hover { background: #36487090; background-clip: content-box; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* Tabular numerals everywhere figures matter */

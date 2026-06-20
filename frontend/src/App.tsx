@@ -12,6 +12,7 @@ import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Templates from './pages/Templates';
 import Settings from './pages/Settings';
+import Appearance from './pages/Appearance';
 import Samba from './pages/Samba';
 
 export default function App() {
@@ -71,6 +72,7 @@ export default function App() {
           }
         />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/appearance" element={<Appearance />} />
         <Route
           path="/samba"
           element={

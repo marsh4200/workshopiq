@@ -12,9 +12,11 @@ from app.core.security import (
     verify_password_async,
 )
 from app.models import User
-from app.schemas import ChangePasswordRequest, Token, UserOut
+from app.schemas import ChangePasswordRequest, PreferencesUpdate, Token, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+VALID_THEMES = {"light", "dark", "system"}
 
 
 @router.post("/login", response_model=Token)
@@ -46,6 +48,25 @@ async def login(
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)):
+    return user
+
+
+@router.patch("/preferences", response_model=UserOut)
+async def update_preferences(
+    payload: PreferencesUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Let any signed-in user store their own appearance preference.
+
+    Available to every role (administrator, staff, client) so each person keeps
+    their own light/dark choice, persisted across all their devices.
+    """
+    if payload.theme_preference not in VALID_THEMES:
+        raise HTTPException(status_code=400, detail="Invalid theme preference")
+    user.theme_preference = payload.theme_preference
+    await db.commit()
+    await db.refresh(user)
     return user
 
 

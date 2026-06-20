@@ -40,6 +40,10 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), default=UserRole.staff.value)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Per-user UI appearance preference: "light", "dark" or "system".
+    # Stored server-side so each person's choice follows them across every
+    # device they sign in on (phone, tablet, desktop).
+    theme_preference: Mapped[str] = mapped_column(String(10), default="dark")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     job_access: Mapped[list["ClientJobAccess"]] = relationship(

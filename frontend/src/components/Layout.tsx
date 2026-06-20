@@ -16,6 +16,7 @@ import {
   MenuItem,
   Snackbar,
   Toolbar,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/SpaceDashboard';
@@ -24,6 +25,9 @@ import AddIcon from '@mui/icons-material/AddCircleOutline';
 import PeopleIcon from '@mui/icons-material/GroupOutlined';
 import ChecklistIcon from '@mui/icons-material/FactCheckOutlined';
 import SettingsIcon from '@mui/icons-material/TuneOutlined';
+import PaletteIcon from '@mui/icons-material/Brightness6Outlined';
+import LightModeIcon from '@mui/icons-material/LightModeOutlined';
+import DarkModeIcon from '@mui/icons-material/DarkModeOutlined';
 import StorageIcon from '@mui/icons-material/Storage';
 import ReportIcon from '@mui/icons-material/AssessmentOutlined';
 import NCRIcon from '@mui/icons-material/ReportProblemOutlined';
@@ -33,6 +37,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import { useThemeMode } from '../context/ThemeModeContext';
 import { Logomark } from './common';
 import { useDeviceType } from '../hooks/useDeviceType';
 import ReviewNotifier from './ReviewNotifier';
@@ -57,6 +62,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { label: 'NCRs', icon: <NCRIcon />, path: '/ncrs', roles: ['administrator', 'staff'] },
       { label: 'Reports', icon: <ReportIcon />, path: '/reports', roles: ['administrator', 'staff'] },
       { label: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+      { label: 'Appearance', icon: <PaletteIcon />, path: '/appearance' },
     ],
   },
   {
@@ -72,6 +78,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
 export default function Layout() {
   const { user, logout, isAdmin } = useAuth();
   const { settings } = useSettings();
+  const { mode, setPreference } = useThemeMode();
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useDeviceType().isMobile;
@@ -192,6 +199,15 @@ export default function Layout() {
             {pageTitle}
           </Typography>
           <Box sx={{ flex: 1 }} />
+          <Tooltip title={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <IconButton
+              color="inherit"
+              onClick={() => setPreference(mode === 'dark' ? 'light' : 'dark')}
+              sx={{ mr: 0.5 }}
+            >
+              {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+            </IconButton>
+          </Tooltip>
           <Box sx={{ textAlign: 'right', mr: 0.5, display: { xs: 'none', sm: 'block' } }}>
             <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.1 }}>
               {user?.full_name || user?.username}
@@ -249,9 +265,9 @@ export default function Layout() {
             '& .MuiDrawer-paper': {
               width: DRAWER,
               boxSizing: 'border-box',
-              backgroundColor: '#0c1220',
+              backgroundColor: (t) => t.palette.sidebar,
               backgroundImage: 'none',
-              borderRight: '1px solid rgba(148,163,184,0.12)',
+              borderRight: (t) => `1px solid ${t.palette.divider}`,
             },
           }}
         >
