@@ -1131,6 +1131,7 @@ function DocumentsTab({
   setError: (s: string) => void;
 }) {
   const { isAdmin } = useAuth();
+  const { isTouch } = useDeviceType();
   const [uploading, setUploading] = useState(false);
 
   const onFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1161,17 +1162,23 @@ function DocumentsTab({
     }
   };
 
-  const view = (filename: string) => {
-    // Open the file at a real authenticated URL so the browser / OS can render
-    // it inline. This replaces the old blob approach: Android cannot open a
-    // blob: URL as a top-level navigation and fails with "no app for this
-    // link". A plain HTTP URL with a correct Content-Type works everywhere.
-    // The window.open call is synchronous inside the click gesture, so it
-    // isn't treated as a blocked pop-up.
-    const w = window.open(fileUrl(job.id, filename), '_blank', 'noopener');
-    if (!w) {
-      setError('Pop-up blocked — allow pop-ups for this site to view documents.');
+  const view = async (filename: string, originalName?: string | null) => {
+    // Android Chrome's inline PDF rendering is unreliable across versions —
+    // some builds download, some show a blank tab. On any touch device we
+    // therefore hand the file to the OS via a download (the same proven path
+    // as the Download button), so the device's PDF/image app opens it. On
+    // desktop we open the real authenticated URL inline in a new tab.
+    if (isTouch) {
+      await download(filename, originalName);
+      return;
     }
+    const a = document.createElement('a');
+    a.href = fileUrl(job.id, filename);
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   const remove = async (docId: number) => {
@@ -1211,7 +1218,7 @@ function DocumentsTab({
                   <TableCell align="right">
                     <IconButton
                       size="small"
-                      onClick={() => view(d.filename)}
+                      onClick={() => view(d.filename, d.original_name)}
                       aria-label="View document"
                       title="View"
                     >
