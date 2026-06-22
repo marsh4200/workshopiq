@@ -34,6 +34,7 @@ import NCRIcon from '@mui/icons-material/ReportProblemOutlined';
 import LogoutIcon from '@mui/icons-material/Logout';
 import KeyIcon from '@mui/icons-material/VpnKeyOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -85,6 +86,18 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const [denyMsg, setDenyMsg] = useState('');
+  // Soft refresh for the APK / installed app, where there's no browser reload.
+  // Bumping this key remounts the routed page so its data re-fetches — no full
+  // page reload, the session and bundle stay put.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshKey((k) => k + 1);
+    window.setTimeout(() => setRefreshing(false), 700);
+  };
 
   const visible = (i: NavItem) => !i.roles || (user && i.roles.includes(user.role));
 
@@ -199,6 +212,21 @@ export default function Layout() {
             {pageTitle}
           </Typography>
           <Box sx={{ flex: 1 }} />
+          {isMobile && (
+            <Tooltip title="Refresh">
+              <IconButton color="inherit" onClick={handleRefresh} sx={{ mr: 0.5 }}>
+                <RefreshIcon
+                  sx={{
+                    animation: refreshing ? 'wiq-spin 0.7s linear' : 'none',
+                    '@keyframes wiq-spin': {
+                      from: { transform: 'rotate(0deg)' },
+                      to: { transform: 'rotate(360deg)' },
+                    },
+                  }}
+                />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
             <IconButton
               color="inherit"
@@ -275,10 +303,23 @@ export default function Layout() {
         </Drawer>
       </Box>
 
-      <Box component="main" sx={{ flexGrow: 1, width: { md: `calc(100% - ${DRAWER}px)` }, p: { xs: 2, md: 3.5 } }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          width: { md: `calc(100% - ${DRAWER}px)` },
+          px: { xs: 2, md: 3.5 },
+          pt: { xs: 2, md: 3.5 },
+          // Extra bottom room so the last card clears the screen edge in the
+          // installed app (no browser chrome to scroll past).
+          pb: { xs: 6, md: 4 },
+        }}
+      >
         <Toolbar />
-        <ReviewNotifier />
-        <Outlet />
+        <Box key={refreshKey}>
+          <ReviewNotifier />
+          <Outlet />
+        </Box>
       </Box>
 
       <Snackbar

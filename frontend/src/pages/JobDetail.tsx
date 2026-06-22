@@ -263,7 +263,7 @@ export default function JobDetail() {
           spacing={1.5}
           sx={{ flexWrap: 'wrap', rowGap: 1 }}
         >
-          <Typography variant="h4" fontWeight={800}>
+          <Typography variant="h4" fontWeight={800} sx={{ fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
             {job.job_number}
           </Typography>
           <StatusBanner status={job.status} />

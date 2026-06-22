@@ -142,13 +142,13 @@ export default function Jobs() {
 
   const JobRows = ({ group }: { group: CustomerGroup }) =>
     isMobile ? (
-      <Stack spacing={1.25} sx={{ p: 1.5, pt: 0.5 }}>
+      <Stack spacing={1.5} sx={{ p: 1.5, pt: 0.75 }}>
         {group.jobs.map((j) => (
           <Card
             key={j.id}
             variant="outlined"
             onClick={() => navigate(`/jobs/${j.id}`)}
-            sx={{ p: 1.5, cursor: 'pointer', bgcolor: 'background.default' }}
+            sx={{ p: 1.75, cursor: 'pointer', bgcolor: 'background.default' }}
           >
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Typography fontWeight={800}>{j.job_number}</Typography>
@@ -234,7 +234,7 @@ export default function Jobs() {
         spacing={2}
         sx={{ mb: 3 }}
       >
-        <Typography variant="h4" fontWeight={800}>
+        <Typography variant="h4" fontWeight={800} sx={{ fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
           Jobs
         </Typography>
         {!isClient && (
@@ -294,17 +294,24 @@ export default function Jobs() {
       )}
 
       {!loading && !error && groups.length > 0 && (
-        <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+          spacing={1}
+          sx={{ mb: 1.5 }}
+        >
           <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, alignSelf: 'center' }}>
             {groups.length} customer{groups.length === 1 ? '' : 's'} · {filtered.length} job
             {filtered.length === 1 ? '' : 's'}
           </Typography>
-          <Button size="small" startIcon={<UnfoldMoreIcon />} onClick={() => setAll(true)} disabled={searching}>
-            Expand all
-          </Button>
-          <Button size="small" startIcon={<UnfoldLessIcon />} onClick={() => setAll(false)} disabled={searching}>
-            Collapse all
-          </Button>
+          <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-end', sm: 'flex-start' }}>
+            <Button size="small" startIcon={<UnfoldMoreIcon />} onClick={() => setAll(true)} disabled={searching}>
+              Expand all
+            </Button>
+            <Button size="small" startIcon={<UnfoldLessIcon />} onClick={() => setAll(false)} disabled={searching}>
+              Collapse all
+            </Button>
+          </Stack>
         </Stack>
       )}
 
