@@ -1,4 +1,5 @@
 """Job lifecycle endpoints: jobs, notes, photos, documents, inspections."""
+import mimetypes
 import secrets
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
@@ -7,7 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_user, require_admin, require_staff
+from app.api.deps import (
+    get_current_user,
+    get_user_for_file,
+    require_admin,
+    require_staff,
+)
 from app.core.database import get_db
 from app.models import (
     ClientJobAccess,
@@ -448,7 +454,7 @@ async def serve_file(
     job_id: int,
     filename: str,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_user_for_file),
 ):
     job = await db.get(Job, job_id)
     if not job:
@@ -457,7 +463,35 @@ async def serve_file(
     path = file_service.file_path(filename)
     if not path.exists() or not filename.startswith(f"job{job_id}_"):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path)
+
+    # Prefer the stored document's recorded type / original name so the browser
+    # (and Android in particular) receive a correct Content-Type and a friendly
+    # filename, and render the file INLINE. Without an explicit inline
+    # disposition + real media type, Android can't pick a viewer and fails with
+    # "no app for this link".
+    doc = (
+        await db.execute(
+            select(Document).where(
+                Document.job_id == job_id, Document.filename == filename
+            )
+        )
+    ).scalar_one_or_none()
+
+    media_type = (
+        (doc.content_type if doc and doc.content_type else None)
+        or mimetypes.guess_type(str(path))[0]
+        or "application/octet-stream"
+    )
+    display_name = (doc.original_name if doc and doc.original_name else None) or filename
+    safe_name = display_name.replace('"', "").replace("\n", " ").replace("\r", " ").strip()
+    if not safe_name:
+        safe_name = filename
+
+    return FileResponse(
+        path,
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+    )
 
 
 # ---------------- Certificate / Job report (PDF) ----------------

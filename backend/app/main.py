@@ -3,7 +3,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
@@ -60,6 +60,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def no_store_api_responses(request: Request, call_next):
+    """Stop browsers / Android WebViews from serving stale API data.
+
+    Without this, a mobile client caches GET /api/jobs and keeps showing an
+    old job count (e.g. 17 of 23) even after logging out and back in, because
+    re-login doesn't clear the HTTP disk cache. Marking API responses
+    no-store forces every request to hit the server.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith(settings.API_PREFIX):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 for r in (auth, users, jobs, costing, customers, templates, dashboard, settings_api, checkin, reports, reviews, final_inspection, ncr, backup, samba):
     app.include_router(r.router, prefix=settings.API_PREFIX)

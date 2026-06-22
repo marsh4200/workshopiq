@@ -56,6 +56,7 @@ import {
   uploadDocuments,
   deleteDocument,
   fetchFileBlob,
+  fileUrl,
   createInspection,
   updateInspection,
   deleteInspection,
@@ -1160,24 +1161,16 @@ function DocumentsTab({
     }
   };
 
-  const view = async (filename: string) => {
-    // Open the tab synchronously inside the click gesture so the browser
-    // doesn't block it as a pop-up. Opening after the await below would
-    // lose the user-gesture context and get blocked.
-    const w = window.open('about:blank', '_blank');
+  const view = (filename: string) => {
+    // Open the file at a real authenticated URL so the browser / OS can render
+    // it inline. This replaces the old blob approach: Android cannot open a
+    // blob: URL as a top-level navigation and fails with "no app for this
+    // link". A plain HTTP URL with a correct Content-Type works everywhere.
+    // The window.open call is synchronous inside the click gesture, so it
+    // isn't treated as a blocked pop-up.
+    const w = window.open(fileUrl(job.id, filename), '_blank', 'noopener');
     if (!w) {
       setError('Pop-up blocked — allow pop-ups for this site to view documents.');
-      return;
-    }
-    w.opener = null;
-    try {
-      const url = await fetchFileBlob(job.id, filename);
-      w.location.href = url;
-      // Revoke a little later so the new tab has time to load the blob.
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (e) {
-      w.close();
-      setError(apiError(e, 'Failed to open document'));
     }
   };
 

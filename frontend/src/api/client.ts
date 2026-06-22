@@ -34,6 +34,12 @@ const api = axios.create({ baseURL: '/api', timeout: 30000 });
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  // Defeat aggressive mobile WebView/browser disk caching of GET responses
+  // (e.g. a stale /api/jobs list showing an old count). A unique param makes
+  // every GET a distinct URL the cache can't satisfy from disk.
+  if ((config.method || 'get').toLowerCase() === 'get') {
+    config.params = { ...(config.params || {}), _: Date.now() };
+  }
   return config;
 });
 
@@ -150,8 +156,11 @@ export const uploadDocuments = async (jobId: number, files: File[]) => {
 export const deleteDocument = (jobId: number, docId: number) =>
   api.delete(`/jobs/${jobId}/documents/${docId}`);
 export const fileUrl = (jobId: number, filename: string) => {
+  // Real authenticated URL (token in query) so a document can be opened
+  // directly in a new tab and handed to the OS viewer. Android cannot open a
+  // blob: URL as a top-level navigation, so we avoid blobs for "view".
   const token = getToken();
-  return `/api/jobs/${jobId}/files/${filename}?_t=${token}`;
+  return `/api/jobs/${jobId}/files/${encodeURIComponent(filename)}?token=${encodeURIComponent(token || '')}`;
 };
 export const fetchFileBlob = async (jobId: number, filename: string) => {
   const { data } = await api.get(`/jobs/${jobId}/files/${filename}`, { responseType: 'blob' });
