@@ -16,6 +16,8 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
@@ -37,6 +39,16 @@ interface CustomerGroup {
   name: string;
   jobs: JobListItem[];
 }
+
+// The closed-jobs lens. 'active' hides Closed jobs (the default working list),
+// 'closed' shows only Closed jobs, 'all' shows everything.
+type JobView = 'active' | 'closed' | 'all';
+
+// Statuses that count as "closed" / archived. A job lands in the Closed view
+// automatically the moment it reaches one of these — nothing to file by hand.
+// Kept as a set so it's a one-line change if "Completed" should join later.
+const CLOSED_STATUSES = new Set(['Closed']);
+const isClosedJob = (j: JobListItem) => CLOSED_STATUSES.has(j.status);
 
 // Newest first: by received date, then job number as a stable fallback.
 function byRecency(a: JobListItem, b: JobListItem): number {
@@ -64,6 +76,16 @@ export default function Jobs() {
   // Optional due-date lens, set by the dashboard tiles: 'overdue' | 'soon'.
   const dueFilter = params.get('due') || '';
 
+  // Closed-jobs lens. Defaults to 'active' so the working list isn't packed
+  // with finished jobs. Persisted in the URL like the other filters.
+  const rawView = (params.get('view') || 'active').toLowerCase();
+  const view: JobView = rawView === 'closed' || rawView === 'all' ? rawView : 'active';
+  // When a specific status is chosen from the dropdown, that *is* the lens, so
+  // the Active/Closed toggle steps aside (disabled) to avoid contradictions
+  // like "Active" + status "Closed". It keeps showing the user's last choice.
+  const viewLocked = !!statusFilter;
+  const effectiveView: JobView = viewLocked ? 'all' : view;
+
   useEffect(() => {
     fetchMeta()
       .then((m) => setStatuses(m.statuses))
@@ -78,7 +100,9 @@ export default function Jobs() {
       .finally(() => setLoading(false));
   }, [statusFilter]);
 
-  const filtered = useMemo(() => {
+  // Stage 1 — search + due lens. Closed-ness is applied separately (stage 2)
+  // so the toggle's counts can reflect what's available under the same search.
+  const baseFiltered = useMemo(() => {
     let list = jobs;
     // Due lens first (driven by the dashboard tiles).
     if (dueFilter === 'overdue' || dueFilter === 'soon') {
@@ -100,6 +124,23 @@ export default function Jobs() {
         (j.eq_number || '').toLowerCase().includes(q),
     );
   }, [jobs, search, dueFilter]);
+
+  // Counts shown on the Active/Closed toggle (reflect the current search/due lens).
+  const activeCount = useMemo(
+    () => baseFiltered.filter((j) => !isClosedJob(j)).length,
+    [baseFiltered],
+  );
+  const closedCount = useMemo(
+    () => baseFiltered.filter(isClosedJob).length,
+    [baseFiltered],
+  );
+
+  // Stage 2 — apply the closed-jobs lens.
+  const filtered = useMemo(() => {
+    if (effectiveView === 'active') return baseFiltered.filter((j) => !isClosedJob(j));
+    if (effectiveView === 'closed') return baseFiltered.filter(isClosedJob);
+    return baseFiltered;
+  }, [baseFiltered, effectiveView]);
 
   // Group jobs into one folder per customer, alphabetical by name.
   const groups = useMemo<CustomerGroup[]>(() => {
@@ -132,6 +173,13 @@ export default function Jobs() {
   const setStatus = (s: string) => {
     if (s) params.set('status', s);
     else params.delete('status');
+    setParams(params, { replace: true });
+  };
+
+  const setView = (v: JobView) => {
+    // 'active' is the default — keep it out of the URL so links stay tidy.
+    if (v === 'active') params.delete('view');
+    else params.set('view', v);
     setParams(params, { replace: true });
   };
 
@@ -248,7 +296,7 @@ export default function Jobs() {
         )}
       </Stack>
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
         <TextField
           placeholder="Search by job number, customer, component, PO or EQ…"
           value={search}
@@ -276,6 +324,43 @@ export default function Jobs() {
             </MenuItem>
           ))}
         </TextField>
+      </Stack>
+
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        sx={{ mb: 3 }}
+      >
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={view}
+          disabled={viewLocked}
+          onChange={(_, v) => v && setView(v)}
+          sx={{ flexShrink: 0, '& .MuiToggleButton-root': { px: 2, textTransform: 'none', fontWeight: 700 } }}
+        >
+          <ToggleButton value="active">
+            Active{activeCount ? ` · ${activeCount}` : ''}
+          </ToggleButton>
+          <ToggleButton value="closed">
+            Closed{closedCount ? ` · ${closedCount}` : ''}
+          </ToggleButton>
+          <ToggleButton value="all">All</ToggleButton>
+        </ToggleButtonGroup>
+        {viewLocked ? (
+          <Typography variant="caption" color="text.secondary">
+            Showing the “{statusFilter}” status — clear it to switch between Active and Closed.
+          </Typography>
+        ) : (
+          <Typography variant="caption" color="text.secondary">
+            {view === 'closed'
+              ? 'Closed jobs only — finished jobs land here automatically.'
+              : view === 'all'
+              ? 'Showing active and closed jobs together.'
+              : 'Closed jobs are tucked away — tap “Closed” to see the archive.'}
+          </Typography>
+        )}
       </Stack>
 
       {dueFilter && (
@@ -333,6 +418,12 @@ export default function Jobs() {
                 ? 'Nothing due in the next 7 days.'
                 : statusFilter
                 ? `No jobs with status "${statusFilter}".`
+                : search.trim()
+                ? 'No jobs match your search.'
+                : effectiveView === 'closed'
+                ? 'No closed jobs yet — finished jobs will land here automatically.'
+                : effectiveView === 'active'
+                ? 'No active jobs right now. Check the Closed view for finished work.'
                 : 'Create your first job to get started.'
             }
           />
