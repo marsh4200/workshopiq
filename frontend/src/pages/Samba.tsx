@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -10,6 +10,7 @@ import {
   Divider,
   FormControlLabel,
   Grid,
+  LinearProgress,
   Stack,
   Switch,
   TextField,
@@ -21,9 +22,9 @@ import WifiTetheringIcon from '@mui/icons-material/WifiTethering';
 import BackupIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
-import { getSamba, updateSamba, testSamba, backupNowSamba, apiError } from '../api/client';
+import { getSamba, updateSamba, testSamba, backupNowSamba, getSambaBackupProgress, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import type { SambaStatus } from '../types';
+import type { SambaStatus, SambaBackupProgress } from '../types';
 
 const NO_RIGHTS_MSG =
   'Unfortunately, you do not have these rights. Please contact the Everton administrating team.';
@@ -68,6 +69,9 @@ export default function Samba() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [backupPct, setBackupPct] = useState(0);
+  const [backupPhase, setBackupPhase] = useState('');
+  const pollRef = useRef<number | null>(null);
 
   const hydrate = (s: SambaStatus) => {
     setStatus(s);
@@ -137,18 +141,74 @@ export default function Samba() {
     }
   };
 
+  const stopPoll = () => {
+    if (pollRef.current !== null) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const applyProgress = (p: SambaBackupProgress) => {
+    if (p.state === 'running') {
+      setBackingUp(true);
+      setBackupPct(p.percent);
+      setBackupPhase(p.phase || 'Working…');
+    } else if (p.state === 'done') {
+      stopPoll();
+      setBackupPct(100);
+      setBackingUp(false);
+      setMsg(p.detail || 'Backup complete.');
+      getSamba().then(setStatus).catch(() => undefined);
+    } else if (p.state === 'error') {
+      stopPoll();
+      setBackingUp(false);
+      setError(p.error ? `Backup failed: ${p.error}` : 'Backup failed.');
+      getSamba().then(setStatus).catch(() => undefined);
+    }
+  };
+
+  const startPoll = () => {
+    stopPoll();
+    pollRef.current = window.setInterval(async () => {
+      try {
+        applyProgress(await getSambaBackupProgress());
+      } catch {
+        /* transient network blip — keep polling */
+      }
+    }, 700);
+  };
+
+  // Stop polling on unmount; if a backup is already running (e.g. after a page
+  // reload mid-backup), pick the progress bar back up.
+  useEffect(() => {
+    let cancelled = false;
+    getSambaBackupProgress()
+      .then((p) => {
+        if (!cancelled && p.state === 'running') {
+          applyProgress(p);
+          startPoll();
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      stopPoll();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const doBackupNow = async () => {
     if (!isAdmin) return setError(NO_RIGHTS_MSG);
     setBackingUp(true);
+    setBackupPct(0);
+    setBackupPhase('Starting backup…');
     clearNotes();
     try {
-      const res = await backupNowSamba();
-      setMsg(res.detail || 'Backup complete.');
-      getSamba().then(setStatus).catch(() => undefined);
+      await backupNowSamba();
+      startPoll();
     } catch (e) {
-      setError(apiError(e, 'Backup failed'));
-    } finally {
       setBackingUp(false);
+      setError(apiError(e, 'Backup failed'));
     }
   };
 
@@ -362,6 +422,34 @@ export default function Samba() {
           {backingUp ? 'Backing up…' : 'Back Up Now'}
         </Button>
       </Stack>
+
+      {backingUp && (
+        <Card sx={{ mb: 4, border: '1px solid', borderColor: 'divider' }}>
+          <CardContent>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <BackupIcon fontSize="small" color="success" />
+                <Typography sx={{ fontWeight: 700 }}>
+                  {backupPhase || 'Backing up…'}
+                </Typography>
+              </Stack>
+              <Typography sx={{ fontWeight: 800 }} color="text.secondary">
+                {backupPct}%
+              </Typography>
+            </Stack>
+            <LinearProgress
+              variant="determinate"
+              value={backupPct}
+              color="success"
+              sx={{ height: 10, borderRadius: 5 }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              Copying a full backup to the network drive — you can keep working; this runs in the
+              background.
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
     </Box>
   );
 }

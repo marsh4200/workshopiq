@@ -10,6 +10,8 @@ The auto-backup keeps the newest ``KEEP`` archives on the share and deletes
 older ones, so the share always holds the two most recent backups (6h apart).
 """
 import logging
+import os
+
 import smbclient
 
 logger = logging.getLogger("workshopiq.samba")
@@ -90,11 +92,23 @@ def test_connection(cfg: SambaConfig) -> None:
         smbclient.reset_connection_cache()
 
 
-def push_file(cfg: SambaConfig, local_path: str, remote_filename: str) -> None:
-    """Copy a local file onto the share as ``remote_filename``."""
+def push_file(cfg: SambaConfig, local_path: str, remote_filename: str, progress_cb=None) -> None:
+    """Copy a local file onto the share as ``remote_filename``.
+
+    ``progress_cb``, if given, is called as ``progress_cb(bytes_sent, total)``
+    after each chunk so a caller can report upload progress. It must not raise;
+    any exception from it is swallowed so a UI hiccup never breaks the backup.
+    """
     _open_session(cfg)
     try:
         _ensure_dir(cfg)
+        total = os.path.getsize(local_path)
+        sent = 0
+        if progress_cb:
+            try:
+                progress_cb(0, total)
+            except Exception:  # noqa: BLE001 — progress is best-effort
+                pass
         with open(local_path, "rb") as src, smbclient.open_file(
             cfg.unc_path(remote_filename), mode="wb"
         ) as dst:
@@ -104,6 +118,12 @@ def push_file(cfg: SambaConfig, local_path: str, remote_filename: str) -> None:
                 if not chunk:
                     break
                 dst.write(chunk)
+                sent += len(chunk)
+                if progress_cb:
+                    try:
+                        progress_cb(sent, total)
+                    except Exception:  # noqa: BLE001 — progress is best-effort
+                        pass
     finally:
         smbclient.reset_connection_cache()
 

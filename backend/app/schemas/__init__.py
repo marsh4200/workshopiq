@@ -117,6 +117,21 @@ class SambaConfigOut(BaseModel):
     detail: str
 
 
+class SambaBackupStartOut(BaseModel):
+    ok: bool
+    job_id: str
+    detail: str
+
+
+class SambaBackupProgressOut(BaseModel):
+    state: str  # "idle" | "running" | "done" | "error"
+    percent: int
+    phase: str
+    job_id: Optional[str] = None
+    detail: Optional[str] = None
+    error: Optional[str] = None
+
+
 # ---------- Notes ----------
 class NoteCreate(BaseModel):
     note_type: str = "internal"
@@ -270,6 +285,7 @@ class FinalInspectionAttemptOut(BaseModel):
     result: str  # "passed" | "failed"
     inspector_name: Optional[str] = None
     reason: Optional[str] = None
+    ncr_number: Optional[str] = None
     internal_reference: Optional[str] = None
     created_at: datetime
 
@@ -284,6 +300,7 @@ class FinalInspectionOut(BaseModel):
     internal_reference: Optional[str] = None
     result: Optional[str] = None  # "passed" | "failed" | None (pending)
     failure_reason: Optional[str] = None
+    ncr_number: Optional[str] = None
     attempts: int = 0
     failed_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -304,6 +321,7 @@ class FinalInspectionSubmit(BaseModel):
 class FinalInspectionFail(BaseModel):
     inspector_name: str
     reason: str
+    ncr_number: Optional[str] = None
 
 
 class ClosureRequest(BaseModel):

@@ -189,6 +189,21 @@ export interface SambaActionResult {
   detail: string;
 }
 
+export interface SambaBackupStart {
+  ok: boolean;
+  job_id: string;
+  detail: string;
+}
+
+export interface SambaBackupProgress {
+  state: 'idle' | 'running' | 'done' | 'error';
+  percent: number;
+  phase: string;
+  job_id?: string | null;
+  detail?: string | null;
+  error?: string | null;
+}
+
 export interface DashboardStats {
   received: number;
   machining: number;
@@ -249,6 +264,7 @@ export interface FinalInspectionAttempt {
   result: 'passed' | 'failed';
   inspector_name?: string | null;
   reason?: string | null;
+  ncr_number?: string | null;
   internal_reference?: string | null;
   created_at: string;
 }
@@ -262,6 +278,7 @@ export interface FinalInspection {
   internal_reference?: string | null;
   result?: 'passed' | 'failed' | null;
   failure_reason?: string | null;
+  ncr_number?: string | null;
   attempts: number;
   failed_at?: string | null;
   completed_at?: string | null;

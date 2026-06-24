@@ -4,8 +4,6 @@ Lets an administrator point WorkshopIQ at an SMB share and turn on automatic
 6-hourly backups. The share password is stored like the SMTP password — write
 only; it is never returned to the browser.
 """
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,12 +11,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_admin
 from app.core.database import get_db
 from app.models import User
-from app.schemas import SambaConfigOut, SambaStatusOut, SambaUpdate
+from app.schemas import (
+    SambaBackupProgressOut,
+    SambaBackupStartOut,
+    SambaConfigOut,
+    SambaStatusOut,
+    SambaUpdate,
+)
 from app.services import samba_service
+from app.services.samba_manual_backup import (
+    is_active,
+    read_progress,
+    start_manual_backup,
+)
 from app.services.samba_scheduler import (
     INTERVAL_SECONDS,
     _cfg_from_settings,
-    run_backup_to_share,
 )
 from app.services.settings_service import get_all_settings, set_setting
 
@@ -95,24 +103,38 @@ async def test_samba(
     return SambaConfigOut(ok=True, detail=f"Connected to {cfg.unc_dir()}")
 
 
-@router.post("/backup-now", response_model=SambaConfigOut)
+@router.post("/backup-now", response_model=SambaBackupStartOut)
 async def backup_now(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    """Run a backup to the share immediately (does not affect the 6h schedule)."""
+    """Start a backup to the share in the background (does not touch the schedule).
+
+    Returns immediately with a job id; the browser then polls ``backup-progress``
+    to drive a progress bar. Only one manual backup may run at a time.
+    """
     cfg = _cfg_from_settings(await get_all_settings(db))
     if not cfg.configured:
         raise HTTPException(status_code=400, detail="Enter a server and share name first.")
-    try:
-        remote = await run_backup_to_share(cfg)
-    except Exception as exc:  # noqa: BLE001
-        await set_setting(db, "smb_last_backup_status", f"error: {exc}")
-        await db.commit()
-        raise HTTPException(status_code=400, detail=f"Backup failed: {exc}")
+    if is_active(await read_progress(db)):
+        raise HTTPException(status_code=409, detail="A backup is already running.")
 
-    now = datetime.now(timezone.utc).isoformat()
-    await set_setting(db, "smb_last_backup_at", now)
-    await set_setting(db, "smb_last_backup_status", "ok")
-    await db.commit()
-    return SambaConfigOut(ok=True, detail=f"Backed up to {remote}")
+    job_id = await start_manual_backup(cfg)
+    return SambaBackupStartOut(ok=True, job_id=job_id, detail="Backup started")
+
+
+@router.get("/backup-progress", response_model=SambaBackupProgressOut)
+async def backup_progress(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Live progress of the most recent manual backup (drives the progress bar)."""
+    p = await read_progress(db)
+    return SambaBackupProgressOut(
+        state=p.get("state", "idle") or "idle",
+        percent=int(p.get("percent", 0) or 0),
+        phase=p.get("phase", "") or "",
+        job_id=p.get("job_id"),
+        detail=p.get("detail"),
+        error=p.get("error"),
+    )

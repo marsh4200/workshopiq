@@ -25,6 +25,8 @@ import type {
   SambaStatus,
   SambaUpdate,
   SambaActionResult,
+  SambaBackupStart,
+  SambaBackupProgress,
   Template,
   User,
 } from '../types';
@@ -269,7 +271,9 @@ export const updateSamba = async (body: SambaUpdate) =>
 export const testSamba = async () =>
   (await api.post<SambaActionResult>('/settings/samba/test')).data;
 export const backupNowSamba = async () =>
-  (await api.post<SambaActionResult>('/settings/samba/backup-now', null, { timeout: 600000 })).data;
+  (await api.post<SambaBackupStart>('/settings/samba/backup-now')).data;
+export const getSambaBackupProgress = async () =>
+  (await api.get<SambaBackupProgress>('/settings/samba/backup-progress')).data;
 
 // Dashboard
 export const getDashboard = async () => (await api.get<DashboardStats>('/dashboard')).data;
@@ -305,7 +309,7 @@ export const submitFinalInspection = async (
 ) => (await api.put<FinalInspection>(`/jobs/${jobId}/final-inspection`, body)).data;
 export const failFinalInspection = async (
   jobId: number,
-  body: { inspector_name: string; reason: string },
+  body: { inspector_name: string; reason: string; ncr_number?: string },
 ) => (await api.post<FinalInspection>(`/jobs/${jobId}/final-inspection/fail`, body)).data;
 export const getPendingInspections = async () =>
   (await api.get<PendingInspection[]>('/final-inspection/pending')).data;
