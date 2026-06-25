@@ -122,6 +122,9 @@ class Job(Base):
     checkins: Mapped[list["JobCheckin"]] = relationship(
         back_populates="job", cascade="all, delete-orphan"
     )
+    inspection_reports: Mapped[list["InspectionReport"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan"
+    )
     review: Mapped["JobReview | None"] = relationship(
         back_populates="job", cascade="all, delete-orphan", uselist=False
     )
@@ -203,6 +206,53 @@ class JobCheckin(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     job: Mapped["Job"] = relationship(back_populates="checkins")
+
+
+class InspectionReport(Base):
+    """A QR-driven Everton inspection report attached to a job.
+
+    Mirrors the ``JobCheckin`` one-time-token pattern: an admin generates a
+    report token for a job, the QR points at a PUBLIC web form, and ONLY on
+    submit is the report recorded, rendered to a PDF, filed into the job's
+    Documents, and the token locked (one-time). To do another report you
+    generate a fresh token.
+
+    ``payload`` holds the full submitted report as JSON (header fields +
+    measurement line items + sign-off) so the PDF can be (re)rendered and the
+    structured data kept for reference.
+    """
+
+    __tablename__ = "inspection_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), index=True
+    )
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    certificate_number: Mapped[str] = mapped_column(String(60), index=True)
+    sequence: Mapped[int] = mapped_column(Integer, default=0)
+
+    submitted: Mapped[bool] = mapped_column(Boolean, default=False)
+    inspector_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    customer_signed_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    qcp_pass: Mapped[str | None] = mapped_column(String(4), nullable=True)   # Y / N
+    qc_reject: Mapped[str | None] = mapped_column(String(4), nullable=True)  # Y / N
+    rework: Mapped[str | None] = mapped_column(String(4), nullable=True)     # Y / N
+
+    payload: Mapped[str | None] = mapped_column(Text, nullable=True)         # JSON
+    scanner_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+    )
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    job: Mapped["Job"] = relationship(back_populates="inspection_reports")
 
 
 class Photo(Base):

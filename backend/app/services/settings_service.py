@@ -13,6 +13,11 @@ DEFAULTS = {
     "job_sequence": "0",
     "ncr_number_prefix": "NCR",
     "ncr_sequence": "0",
+    # Everton inspection-report certificate numbering. Format: "<prefix> <YY><NNNN>"
+    # e.g. ECE 260001. Bump ece_sequence in Settings if you need to continue an
+    # existing run of numbers.
+    "ece_number_prefix": "ECE",
+    "ece_sequence": "0",
     "email_host": "",
     "email_port": "587",
     "email_user": "",
@@ -92,3 +97,24 @@ async def next_ncr_number(db: AsyncSession) -> tuple[str, int]:
     seq += 1
     await set_setting(db, "ncr_sequence", str(seq))
     return f"{prefix} {seq}", seq
+
+
+async def next_ece_number(db: AsyncSession) -> tuple[str, int]:
+    """Increment the inspection-report sequence and return (cert_number, seq).
+
+    Format: ``<prefix> <YY><NNNN>`` (e.g. ``ECE 260001``) — a two-digit year
+    followed by a zero-padded running number, matching the existing Everton
+    certificate convention (e.g. ECE 230168).
+    """
+    from datetime import datetime, timezone
+
+    prefix = await get_setting(db, "ece_number_prefix") or "ECE"
+    seq_raw = await get_setting(db, "ece_sequence") or "0"
+    try:
+        seq = int(seq_raw)
+    except ValueError:
+        seq = 0
+    seq += 1
+    await set_setting(db, "ece_sequence", str(seq))
+    yy = datetime.now(timezone.utc).strftime("%y")
+    return f"{prefix} {yy}{seq:04d}", seq

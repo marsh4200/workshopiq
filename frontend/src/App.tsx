@@ -8,6 +8,7 @@ import Jobs from './pages/Jobs';
 import NewJob from './pages/NewJob';
 import JobDetail from './pages/JobDetail';
 import NCRs from './pages/NCRs';
+import InspectionReports from './pages/InspectionReports';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Templates from './pages/Templates';
@@ -44,6 +45,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={['administrator', 'staff']}>
               <NCRs />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/inspection-reports"
+          element={
+            <ProtectedRoute roles={['administrator', 'staff']}>
+              <InspectionReports />
             </ProtectedRoute>
           }
         />

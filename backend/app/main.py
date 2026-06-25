@@ -16,6 +16,7 @@ from app.api import (
     customers,
     dashboard,
     final_inspection,
+    inspection_report,
     jobs,
     ncr,
     reports,
@@ -97,7 +98,7 @@ async def no_store_api_responses(request: Request, call_next):
         response.headers["X-WIQ-Worker"] = str(os.getpid())
     return response
 
-for r in (auth, users, jobs, costing, customers, templates, dashboard, settings_api, checkin, reports, reviews, final_inspection, ncr, backup, samba):
+for r in (auth, users, jobs, costing, customers, templates, dashboard, settings_api, checkin, reports, reviews, final_inspection, ncr, backup, samba, inspection_report):
     app.include_router(r.router, prefix=settings.API_PREFIX)
 
 

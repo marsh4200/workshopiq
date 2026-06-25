@@ -355,3 +355,25 @@ export interface ReviewNotification {
   reviewer_name?: string | null;
   completed_at?: string | null;
 }
+
+export interface InspectionReportItem {
+  id: number;
+  job_id: number;
+  job_number?: string | null;
+  customer_name?: string | null;
+  token: string;
+  certificate_number: string;
+  submitted: boolean;
+  inspector_name?: string | null;
+  qcp_pass?: string | null;
+  qc_reject?: string | null;
+  rework?: string | null;
+  document_id?: number | null;
+  submitted_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface InspectionReportDetail extends InspectionReportItem {
+  url: string;
+  qr_png: string;
+}

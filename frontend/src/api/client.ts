@@ -7,6 +7,8 @@ import type {
   DashboardStats,
   FinalInspection,
   Inspection,
+  InspectionReportItem,
+  InspectionReportDetail,
   JobDetail,
   JobListItem,
   JobCostItem,
@@ -342,3 +344,28 @@ export const updateNCR = async (id: number, body: Record<string, unknown>) =>
 export const deleteNCR = (id: number) => api.delete(`/ncrs/${id}`);
 
 export default api;
+
+// Inspection reports (Everton) — QR-driven, file straight to job documents.
+export const listInspectionReports = async () =>
+  (await api.get<InspectionReportItem[]>('/inspection-reports')).data;
+
+export const generateInspectionReport = async (job_id: number) =>
+  (await api.post<InspectionReportDetail>('/inspection-reports/generate', { job_id })).data;
+
+export const getInspectionReport = async (id: number) =>
+  (await api.get<InspectionReportDetail>(`/inspection-reports/${id}`)).data;
+
+export const deleteInspectionReport = (id: number) =>
+  api.delete(`/inspection-reports/${id}`);
+
+// Public, no-auth form URL the QR points at (also used for "fill on screen").
+export const inspectionReportFormUrl = (token: string) =>
+  `${window.location.origin}/api/inspection-report/${token}`;
+
+// Blank printable sheet (PDF) — opened in a new tab for printing.
+export const openBlankInspectionReport = async () => {
+  const res = await api.get('/inspection-reports/blank.pdf', { responseType: 'blob' });
+  const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+};

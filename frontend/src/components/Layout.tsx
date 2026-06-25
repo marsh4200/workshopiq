@@ -24,6 +24,7 @@ import WorkIcon from '@mui/icons-material/Engineering';
 import AddIcon from '@mui/icons-material/AddCircleOutline';
 import PeopleIcon from '@mui/icons-material/GroupOutlined';
 import ChecklistIcon from '@mui/icons-material/FactCheckOutlined';
+import QrCodeIcon from '@mui/icons-material/QrCode2';
 import SettingsIcon from '@mui/icons-material/TuneOutlined';
 import PaletteIcon from '@mui/icons-material/Brightness6Outlined';
 import LightModeIcon from '@mui/icons-material/LightModeOutlined';
@@ -61,6 +62,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { label: 'Jobs', icon: <WorkIcon />, path: '/jobs' },
       { label: 'New Job', icon: <AddIcon />, path: '/jobs/new', roles: ['administrator', 'staff'] },
       { label: 'NCRs', icon: <NCRIcon />, path: '/ncrs', roles: ['administrator', 'staff'] },
+      { label: 'Inspection Reports', icon: <QrCodeIcon />, path: '/inspection-reports', roles: ['administrator', 'staff'] },
       { label: 'Reports', icon: <ReportIcon />, path: '/reports', roles: ['administrator', 'staff'] },
       { label: 'Settings', icon: <SettingsIcon />, path: '/settings' },
       { label: 'Appearance', icon: <PaletteIcon />, path: '/appearance' },
