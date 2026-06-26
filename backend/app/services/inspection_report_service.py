@@ -3,12 +3,10 @@
 Pure reportlab (platypus) — no headless browser, so it runs on the VPS with no
 extra system packages. Two entry points:
 
-* :func:`render_report_pdf` — a filled report (header + measurement rows +
-  sign-off) for a submitted inspection. Returns PDF bytes.
-* :func:`render_blank_pdf` — a blank printable sheet (the official layout with
-  empty measurement rows) for an employee to fill in by hand.
+* :func:`render_report_pdf` — a filled report for a submitted inspection.
+* :func:`render_blank_pdf` — a blank printable sheet for hand completion.
 
-The layout, wording and column structure follow
+Layout, wording, column structure and field pairing follow
 ``Inspection_Report_Everton_new_xl.xlsx`` (Everton Construction & Engineering).
 """
 from __future__ import annotations
@@ -35,61 +33,65 @@ LOGO_PATH = Path(__file__).resolve().parent.parent / "static" / "everton_logo.pn
 
 INK = colors.HexColor("#111111")
 GREY = colors.HexColor("#d9d9d9")
-LIGHT = colors.HexColor("#f2f2f2")
+LIGHT = colors.HexColor("#eef0f3")
 LINE = colors.HexColor("#000000")
 ACCENT = colors.HexColor("#1f3fae")
 
-# Measurement table column widths (portrait A4 usable width ~ 180mm).
+USABLE_W = 180 * mm
+
+# Measurement table columns (sum == USABLE_W).
 COL_WIDTHS = [
-    52 * mm,  # DESCRIPTION
-    24 * mm,  # DRG SIZE TOL (1)
-    24 * mm,  # DRG SIZE TOL (2)
-    18 * mm,  # REQ
-    18 * mm,  # ACT
-    22 * mm,  # FINISHED
-    22 * mm,  # ACCEPT
+    50 * mm,  # DESCRIPTION
+    23 * mm,  # DRAWING SIZE TOL (1)
+    23 * mm,  # DRAWING SIZE TOL (2)
+    17 * mm,  # ACTUAL SIZE — REQ
+    17 * mm,  # ACTUAL SIZE — ACT
+    25 * mm,  # FINISHED
+    25 * mm,  # ACCEPT (YES / NO)
 ]
+
+BODY_ROW_H = 8.4 * mm   # comfortable, even for blank rows
+HEAD_ROW_H = 7.2 * mm
 
 
 def _styles() -> dict[str, ParagraphStyle]:
     return {
         "title": ParagraphStyle(
-            "title", fontName="Helvetica-Bold", fontSize=12, leading=14,
+            "title", fontName="Helvetica-Bold", fontSize=13, leading=15,
             alignment=TA_CENTER, textColor=INK,
         ),
         "label": ParagraphStyle(
-            "label", fontName="Helvetica-Bold", fontSize=7.5, leading=9,
+            "label", fontName="Helvetica-Bold", fontSize=8.5, leading=10,
             alignment=TA_LEFT, textColor=INK,
         ),
         "value": ParagraphStyle(
-            "value", fontName="Helvetica", fontSize=8.5, leading=10,
+            "value", fontName="Helvetica", fontSize=9.5, leading=11,
             alignment=TA_LEFT, textColor=INK,
         ),
         "th": ParagraphStyle(
-            "th", fontName="Helvetica-Bold", fontSize=7.5, leading=8.5,
+            "th", fontName="Helvetica-Bold", fontSize=8, leading=9.5,
             alignment=TA_CENTER, textColor=INK,
         ),
         "td": ParagraphStyle(
-            "td", fontName="Helvetica", fontSize=8, leading=9.5,
+            "td", fontName="Helvetica", fontSize=9, leading=11,
             alignment=TA_LEFT, textColor=INK,
         ),
         "tdc": ParagraphStyle(
-            "tdc", fontName="Helvetica", fontSize=8, leading=9.5,
+            "tdc", fontName="Helvetica", fontSize=9, leading=11,
             alignment=TA_CENTER, textColor=INK,
         ),
         "sign": ParagraphStyle(
-            "sign", fontName="Helvetica-Oblique", fontSize=11, leading=13,
+            "sign", fontName="Helvetica-Oblique", fontSize=13, leading=15,
             alignment=TA_LEFT, textColor=ACCENT,
         ),
         "foot": ParagraphStyle(
-            "foot", fontName="Helvetica", fontSize=6.5, leading=8,
+            "foot", fontName="Helvetica", fontSize=7, leading=9,
             alignment=TA_CENTER, textColor=colors.HexColor("#888888"),
         ),
     }
 
 
 def _logo_band() -> Table:
-    """Black-bordered banner with the Everton logo (mirrors the sheet header)."""
     cell = ""
     if LOGO_PATH.exists():
         try:
@@ -102,62 +104,62 @@ def _logo_band() -> Table:
             cell = Paragraph(
                 "<b>Everton Construction &amp; Engineering</b>", _styles()["title"]
             )
-    band = Table([[cell]], colWidths=[180 * mm])
+    band = Table([[cell]], colWidths=[USABLE_W])
     band.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 2.5, LINE),
+        ("BOX", (0, 0), (-1, -1), 3, LINE),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
     return band
 
 
 def _title_band(st) -> Table:
-    t = Table([[Paragraph("INSPECTION REPORT", st["title"])]], colWidths=[180 * mm])
+    t = Table([[Paragraph("INSPECTION REPORT", st["title"])]], colWidths=[USABLE_W])
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), GREY),
-        ("BOX", (0, 0), (-1, -1), 0.75, LINE),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("BOX", (0, 0), (-1, -1), 1, LINE),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
     return t
-
-
-def _kv(label: str, value: str, st) -> list:
-    return [Paragraph(label, st["label"]), Paragraph(value or "&nbsp;", st["value"])]
 
 
 def _header_grid(h: dict, st) -> Table:
-    """4-column label/value grid covering every header field on the sheet."""
+    """Label/value grid matching the sheet's field pairing exactly.
+
+    Left labels : CERTIFICATE NUMBER, CUSTOMER, JOB DESC, DRAWING NUMBER, QUANTITY
+    Right labels:        (none),       DATE,    JOB NO,     QCP NO,        EVE JOB
+    """
+    def L(t):
+        return Paragraph(t, st["label"])
+
+    def V(t):
+        return Paragraph((t or "").replace("\n", "<br/>") or "&nbsp;", st["value"])
+
     rows = [
-        _kv("CERTIFICATE NUMBER", h.get("certificate_number", ""), st)
-        + _kv("DATE", h.get("date", ""), st),
-        _kv("CUSTOMER", h.get("customer", ""), st)
-        + _kv("JOB NO", h.get("job_no", ""), st),
-        _kv("JOB DESC", h.get("job_desc", ""), st)
-        + _kv("QCP NO", h.get("qcp_no", ""), st),
-        _kv("DRAWING NUMBER", h.get("drawing_number", ""), st)
-        + _kv("EVE JOB", h.get("eve_job", ""), st),
-        _kv("QUANTITY", h.get("quantity", ""), st)
-        + [Paragraph("", st["label"]), Paragraph("", st["value"])],
+        [L("CERTIFICATE NUMBER"), V(h.get("certificate_number", "")), L(""), V("")],
+        [L("CUSTOMER"), V(h.get("customer", "")), L("DATE"), V(h.get("date", ""))],
+        [L("JOB DESC"), V(h.get("job_desc", "")), L("JOB NO"), V(h.get("job_no", ""))],
+        [L("DRAWING NUMBER"), V(h.get("drawing_number", "")), L("QCP NO"), V(h.get("qcp_no", ""))],
+        [L("QUANTITY"), V(h.get("quantity", "")), L("EVE JOB"), V(h.get("eve_job", ""))],
     ]
-    t = Table(rows, colWidths=[34 * mm, 56 * mm, 24 * mm, 66 * mm])
+    t = Table(rows, colWidths=[34 * mm, 56 * mm, 24 * mm, 66 * mm], rowHeights=[8.4 * mm] * 5)
     t.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+        ("GRID", (0, 0), (-1, -1), 0.75, LINE),
         ("BACKGROUND", (0, 0), (0, -1), LIGHT),
         ("BACKGROUND", (2, 0), (2, -1), LIGHT),
+        ("SPAN", (1, 0), (3, 0)),          # certificate value spans the full right side
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
-        ("SPAN", (3, 4), (3, 4)),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
     ]))
     return t
 
 
-def _measure_table(items: list[dict], st, *, min_rows: int = 12) -> Table:
-    header_top = [
+def _measure_table(items: list[dict], st, *, rows_total: int) -> Table:
+    head1 = [
         Paragraph("DESCRIPTION", st["th"]),
         Paragraph("DRAWING", st["th"]),
         Paragraph("DRAWING", st["th"]),
@@ -166,7 +168,7 @@ def _measure_table(items: list[dict], st, *, min_rows: int = 12) -> Table:
         Paragraph("FINISHED", st["th"]),
         Paragraph("ACCEPT", st["th"]),
     ]
-    header_sub = [
+    head2 = [
         Paragraph("", st["th"]),
         Paragraph("SIZE TOL (1)", st["th"]),
         Paragraph("SIZE TOL (2)", st["th"]),
@@ -175,14 +177,15 @@ def _measure_table(items: list[dict], st, *, min_rows: int = 12) -> Table:
         Paragraph("", st["th"]),
         Paragraph("YES / NO", st["th"]),
     ]
-    data = [header_top, header_sub]
+    data = [head1, head2]
 
-    body_rows = list(items)
-    while len(body_rows) < min_rows:
-        body_rows.append({})
+    body = list(items)
+    while len(body) < rows_total:
+        body.append({})
 
-    for it in body_rows:
+    for it in body:
         accept = (it.get("accept") or "").upper()
+        accept = {"YES": "Y", "NO": "N"}.get(accept, accept)
         data.append([
             Paragraph(str(it.get("description", "") or ""), st["td"]),
             Paragraph(str(it.get("tol1", "") or ""), st["tdc"]),
@@ -193,35 +196,51 @@ def _measure_table(items: list[dict], st, *, min_rows: int = 12) -> Table:
             Paragraph(accept, st["tdc"]),
         ])
 
-    t = Table(data, colWidths=COL_WIDTHS, repeatRows=2)
-    style = [
-        ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+    row_heights = [HEAD_ROW_H, HEAD_ROW_H] + [BODY_ROW_H] * len(body)
+    t = Table(data, colWidths=COL_WIDTHS, rowHeights=row_heights, repeatRows=2)
+    t.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.75, LINE),
         ("BACKGROUND", (0, 0), (-1, 1), GREY),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        # Merge the two header rows for single-line columns.
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
         ("SPAN", (0, 0), (0, 1)),   # DESCRIPTION
-        ("SPAN", (3, 0), (4, 0)),   # ACTUAL SIZE over REQ/ACT
+        ("SPAN", (3, 0), (4, 0)),   # ACTUAL SIZE over REQ / ACT
         ("SPAN", (5, 0), (5, 1)),   # FINISHED
-        ("SPAN", (6, 0), (6, 0)),   # ACCEPT top
-    ]
-    t.setStyle(TableStyle(style))
+    ]))
     return t
 
 
 def _yn(value: str | None) -> str:
     v = (value or "").strip().upper()
     if v in ("Y", "YES"):
-        return "Y  /  <strike>N</strike>"
+        return "<b>Y</b>  /  <strike>N</strike>"
     if v in ("N", "NO"):
-        return "<strike>Y</strike>  /  N"
+        return "<strike>Y</strike>  /  <b>N</b>"
     return "Y  /  N"
 
 
+def _kv_row(label: str, value: str, st, *, sign: bool = False) -> Table:
+    if sign:
+        rhs = Paragraph(f"<i>{value}</i>" if value else "&nbsp;", st["sign"])
+    else:
+        rhs = Paragraph(value or "&nbsp;", st["value"])
+    t = Table([[Paragraph(label, st["label"]), rhs]], colWidths=[26 * mm, 62 * mm],
+              rowHeights=[8 * mm])
+    t.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BACKGROUND", (0, 0), (0, 0), LIGHT),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.75, LINE),
+        ("LINEAFTER", (0, 0), (0, 0), 0.75, LINE),
+    ]))
+    return t
+
+
 def _signoff(d: dict, st) -> list:
-    # Result strip: QCP-PASS | QC-REJECT | REWORK
     strip = Table(
         [[
             Paragraph("QCP-PASS", st["label"]),
@@ -231,79 +250,54 @@ def _signoff(d: dict, st) -> list:
             Paragraph("REWORK", st["label"]),
             Paragraph(_yn(d.get("rework")), st["value"]),
         ]],
-        colWidths=[28 * mm, 30 * mm, 28 * mm, 30 * mm, 26 * mm, 38 * mm],
+        colWidths=[26 * mm, 32 * mm, 26 * mm, 32 * mm, 24 * mm, 40 * mm],
+        rowHeights=[9 * mm],
     )
     strip.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+        ("GRID", (0, 0), (-1, -1), 0.75, LINE),
         ("BACKGROUND", (0, 0), (0, 0), LIGHT),
         ("BACKGROUND", (2, 0), (2, 0), LIGHT),
         ("BACKGROUND", (4, 0), (4, 0), LIGHT),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
     ]))
 
-    def _sign_col(title: str, name: str, date: str) -> Table:
+    def col(title, name, date):
+        head = Table([[Paragraph(title, st["th"])]], colWidths=[88 * mm], rowHeights=[8 * mm])
+        head.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), GREY),
+            ("BOX", (0, 0), (-1, -1), 0.75, LINE),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
         inner = Table(
-            [
-                [Paragraph(title, st["th"])],
-                [_kv_row("NAME", name, st)],
-                [_kv_row("DATE", date, st)],
-                [_sign_row("SIGNATURE", name, st)],
-            ],
+            [[head],
+             [_kv_row("NAME", name, st)],
+             [_kv_row("DATE", date, st)],
+             [_kv_row("SIGNATURE", name, st, sign=True)]],
             colWidths=[88 * mm],
         )
         inner.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.5, LINE),
-            ("BACKGROUND", (0, 0), (0, 0), GREY),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("BOX", (0, 0), (-1, -1), 0.75, LINE),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
         ]))
         return inner
 
     cols = Table(
-        [[
-            _sign_col("INSPECTION EVERTON", d.get("inspector_name", ""), d.get("date", "")),
-            _sign_col("CUSTOMER", d.get("customer_signed_name", ""), d.get("customer_date", "")),
-        ]],
+        [[col("INSPECTION EVERTON", d.get("inspector_name", ""), d.get("date", "")),
+          col("CUSTOMER", d.get("customer_signed_name", ""), d.get("customer_date", ""))]],
         colWidths=[90 * mm, 90 * mm],
     )
     cols.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
         ("RIGHTPADDING", (0, 0), (0, 0), 4),
         ("LEFTPADDING", (1, 0), (1, 0), 4),
+        ("RIGHTPADDING", (1, 0), (1, 0), 0),
     ]))
-    return [strip, Spacer(1, 4), cols]
-
-
-def _kv_row(label: str, value: str, st) -> Table:
-    t = Table([[Paragraph(label, st["label"]), Paragraph(value or "&nbsp;", st["value"])]],
-              colWidths=[24 * mm, 64 * mm])
-    t.setStyle(TableStyle([
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    return t
-
-
-def _sign_row(label: str, name: str, st) -> Table:
-    sig = f'<i>{name}</i>' if name else "&nbsp;"
-    t = Table([[Paragraph(label, st["label"]), Paragraph(sig, st["sign"])]],
-              colWidths=[24 * mm, 64 * mm])
-    t.setStyle(TableStyle([
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    return t
+    return [strip, Spacer(1, 6), cols]
 
 
 def _build(report: dict, *, blank: bool) -> bytes:
@@ -318,16 +312,17 @@ def _build(report: dict, *, blank: bool) -> bytes:
     header = report.get("header", {})
     items = [] if blank else report.get("items", [])
     signoff = report.get("signoff", {})
+    rows_total = 14 if blank else max(len(items) + 2, 8)
 
     story = [
-        _logo_band(), Spacer(1, 6),
-        _title_band(st), Spacer(1, 6),
-        _header_grid(header, st), Spacer(1, 8),
-        _measure_table(items, st, min_rows=22 if blank else 12), Spacer(1, 8),
+        _logo_band(), Spacer(1, 8),
+        _title_band(st), Spacer(1, 8),
+        _header_grid(header, st), Spacer(1, 10),
+        _measure_table(items, st, rows_total=rows_total), Spacer(1, 10),
     ]
     story += _signoff(signoff, st)
     story += [
-        Spacer(1, 8),
+        Spacer(1, 10),
         Paragraph(
             "Everton Construction &amp; Engineering · Machinists and General "
             "Engineering · Generated by WorkshopIQ",
@@ -339,27 +334,23 @@ def _build(report: dict, *, blank: bool) -> bytes:
 
 
 def render_report_pdf(report: dict) -> bytes:
-    """Render a filled inspection report. ``report`` shape::
+    """Render a filled inspection report.
 
-        {
-          "header": {certificate_number, date, customer, job_no, job_desc,
-                     drawing_number, qcp_no, quantity, eve_job},
-          "items": [{description, tol1, tol2, req, act, finished, accept}, ...],
-          "signoff": {qcp_pass, qc_reject, rework, inspector_name, date,
-                      customer_signed_name, customer_date},
-        }
+    ``report`` shape::
+
+        {"header": {certificate_number, date, customer, job_no, job_desc,
+                    drawing_number, qcp_no, quantity, eve_job},
+         "items": [{description, tol1, tol2, req, act, finished, accept}, ...],
+         "signoff": {qcp_pass, qc_reject, rework, inspector_name, date,
+                     customer_signed_name, customer_date}}
     """
     return _build(report, blank=False)
 
 
 def render_blank_pdf(certificate_number: str = "") -> bytes:
     """Render a blank printable sheet for hand completion."""
-    today = datetime.now(timezone.utc).strftime("%d/%m/%Y")
     return _build(
-        {
-            "header": {"certificate_number": certificate_number, "date": ""},
-            "items": [],
-            "signoff": {"date": ""},
-        },
+        {"header": {"certificate_number": certificate_number}, "items": [],
+         "signoff": {}},
         blank=True,
     )

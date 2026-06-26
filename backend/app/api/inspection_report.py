@@ -208,132 +208,264 @@ async def delete_report(
 
 
 # ----------------------------- public form (no auth) -----------------------------
-def _field(label: str, name: str, value: str = "", *, ph: str = "", readonly: bool = False) -> str:
-    ro = " readonly" if readonly else ""
+# The digital fill-in form is a faithful white "paper" replica of the Everton
+# inspection sheet — same logo banner, title bar, header grid, measurement
+# table and sign-off block — with the cells turned into inputs. It is NOT the
+# dark WorkshopIQ chrome; it deliberately looks like the printed form.
+
+INITIAL_ROWS = 15  # empty measurement rows shown on load (like the paper sheet)
+
+
+def _hv(value: str) -> str:
+    return html.escape(value or "", quote=True)
+
+
+def _accept_select() -> str:
     return (
-        f'<label for="{name}">{html.escape(label)}</label>'
-        f'<input type="text" id="{name}" name="{name}" value="{html.escape(value)}" '
-        f'placeholder="{html.escape(ph)}"{ro}/>'
+        '<select data-k="accept" class="acc">'
+        '<option value=""></option>'
+        '<option value="Y">Y</option>'
+        '<option value="N">N</option>'
+        "</select>"
     )
 
 
-def _select(label: str, name: str, values: list[str], placeholder: str) -> str:
+def _yn_select(name: str, value: str = "") -> str:
+    sel_y = " selected" if value.upper() == "Y" else ""
+    sel_n = " selected" if value.upper() == "N" else ""
     return (
-        f'<label for="{name}">{html.escape(label)}</label>'
-        f'<select id="{name}" name="{name}">{_options(values, placeholder)}</select>'
+        f'<select name="{name}" class="yn">'
+        f'<option value=""></option>'
+        f'<option value="Y"{sel_y}>Y</option>'
+        f'<option value="N"{sel_n}>N</option>'
+        "</select>"
     )
 
 
-def _form_page(token: str, job: Job, h: dict) -> str:
-    body = f"""
-    <h1>Inspection report</h1>
-    <p class="sub">Complete and submit — it files straight to the job's documents.</p>
-    <div class="meta">{_job_line(job)} · <b>{html.escape(h['certificate_number'])}</b></div>
-
-    <form method="post" action="{settings.API_PREFIX}/inspection-report/{html.escape(token)}" onsubmit="return packRows()">
-      <div class="sec">Header</div>
-      {_field("Certificate number", "certificate_number", h['certificate_number'], readonly=True)}
-      {_field("Date", "date", h['date'])}
-      {_field("Customer", "customer", h['customer'])}
-      {_field("Job no", "job_no", h['job_no'])}
-      {_field("Job description", "job_desc", h['job_desc'])}
-      {_field("Drawing number", "drawing_number", h['drawing_number'], ph="e.g. DRG-7781-A")}
-      {_field("QCP no", "qcp_no", h['qcp_no'])}
-      {_field("Quantity", "quantity", h['quantity'])}
-      {_field("EVE job", "eve_job", h['eve_job'])}
-
-      <div class="sec">Measurements</div>
-      <div id="rows"></div>
-      <button type="button" class="addbtn" onclick="addRow()">+ Add line</button>
-      <input type="hidden" name="items_json" id="items_json"/>
-
-      <div class="sec">Result</div>
-      {_select("QCP-PASS", "qcp_pass", YN_OPTIONS, "Y / N…")}
-      {_select("QC-REJECT", "qc_reject", YN_OPTIONS, "Y / N…")}
-      {_select("REWORK", "rework", YN_OPTIONS, "Y / N…")}
-
-      <div class="sec">Sign-off</div>
-      {_select("Inspector (Everton)", "inspector_name", OPERATORS, "Select inspector…")}
-      {_field("Customer name (optional)", "customer_signed_name", "")}
-
-      <button type="submit">Submit &amp; file to job</button>
-    </form>
-
-    <template id="rowtpl">
-      <div class="row">
-        <div class="rowhead"><span class="rownum"></span><button type="button" class="rm" onclick="rmRow(this)">&times;</button></div>
-        <input type="text" data-k="description" placeholder="Description"/>
-        <div class="two">
-          <input type="text" data-k="tol1" placeholder="Drawing size tol (1)"/>
-          <input type="text" data-k="tol2" placeholder="Drawing size tol (2)"/>
-        </div>
-        <div class="two">
-          <input type="text" data-k="req" placeholder="Actual — REQ"/>
-          <input type="text" data-k="act" placeholder="Actual — ACT"/>
-        </div>
-        <div class="two">
-          <input type="text" data-k="finished" placeholder="Finished"/>
-          <select data-k="accept">
-            <option value="" disabled selected>Accept…</option>
-            <option value="Y">Accept — YES</option>
-            <option value="N">Accept — NO</option>
-          </select>
-        </div>
-      </div>
-    </template>
-
-    <script>
-      var rowsEl = document.getElementById('rows');
-      var tpl = document.getElementById('rowtpl');
-      function renumber() {{
-        var rs = rowsEl.querySelectorAll('.row');
-        rs.forEach(function(r,i){{ r.querySelector('.rownum').textContent = 'Line ' + (i+1); }});
-      }}
-      function addRow() {{
-        var node = tpl.content.cloneNode(true);
-        rowsEl.appendChild(node);
-        renumber();
-      }}
-      function rmRow(btn) {{
-        var row = btn.closest('.row');
-        if (rowsEl.querySelectorAll('.row').length > 1) {{ row.remove(); renumber(); }}
-      }}
-      function packRows() {{
-        var out = [];
-        rowsEl.querySelectorAll('.row').forEach(function(r){{
-          var o = {{}}, any = false;
-          r.querySelectorAll('[data-k]').forEach(function(el){{
-            o[el.getAttribute('data-k')] = el.value || '';
-            if (el.value) any = true;
-          }});
-          if (any) out.push(o);
-        }});
-        document.getElementById('items_json').value = JSON.stringify(out);
-        return true;
-      }}
-      addRow();
-    </script>"""
-    return _page("Inspection report", body)
+def _inspector_select(name: str) -> str:
+    opts = ['<option value=""></option>']
+    opts += [f'<option value="{_hv(v)}">{html.escape(v)}</option>' for v in OPERATORS]
+    return f'<select name="{name}" class="cellsel">{"".join(opts)}</select>'
 
 
-_EXTRA_CSS = """
+def _meas_row() -> str:
+    """One measurement table row (matches the sheet's columns)."""
+    return (
+        "<tr>"
+        '<td><input data-k="description"/></td>'
+        '<td><input data-k="tol1"/></td>'
+        '<td><input data-k="tol2"/></td>'
+        '<td><input data-k="req"/></td>'
+        '<td><input data-k="act"/></td>'
+        '<td><input data-k="finished"/></td>'
+        f"<td>{_accept_select()}</td>"
+        "</tr>"
+    )
+
+
+def _form_html(token: str, job: Job, h: dict) -> str:
+    action = f"{settings.API_PREFIX}/inspection-report/{html.escape(token)}"
+    logo = f"{settings.API_PREFIX}/inspection-report/{html.escape(token)}/logo.png"
+    rows = "".join(_meas_row() for _ in range(INITIAL_ROWS))
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="robots" content="noindex"/>
+<title>Inspection Report · {_hv(h['certificate_number'])}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  .sec {{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12px;
-    letter-spacing:.6px; text-transform:uppercase; color:#14b8a6;
-    margin:22px 0 12px; padding-bottom:6px; border-bottom:1px solid #262b35; }}
-  .row {{ background:#0f1115; border:1px solid #262b35; border-radius:12px;
-    padding:12px; margin-bottom:12px; }}
-  .rowhead {{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }}
-  .rownum {{ font-size:12px; font-weight:600; color:#9aa3b2; }}
-  .rm {{ width:auto; background:transparent; color:#f43f5e; font-size:20px; line-height:1;
-    border:none; padding:0 6px; cursor:pointer; }}
-  .row input, .row select {{ margin-bottom:8px !important; }}
-  .two {{ display:flex; gap:8px; }}
-  .two > * {{ flex:1; min-width:0; }}
-  .addbtn {{ background:transparent; color:#14b8a6; border:1px dashed #2d8c80;
-    font-weight:600; margin-bottom:4px; }}
+  * {{ box-sizing: border-box; }}
+  body {{ margin:0; background:#e9ebee; color:#000;
+    font-family:'Arimo','Liberation Sans',Arial,sans-serif; padding:14px 8px 60px; }}
+  .sheet {{ max-width:880px; margin:0 auto; background:#fff; padding:14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.18); border-radius:4px; }}
+  .logo-band {{ border:3px solid #000; padding:10px 8px; text-align:center; }}
+  .logo-band img {{ max-width:100%; height:auto; display:block; margin:0 auto; }}
+  .title-band {{ background:#d9d9d9; border:1px solid #000; border-top:none;
+    text-align:center; font-weight:700; letter-spacing:.5px; padding:7px; font-size:15px; }}
+  table {{ border-collapse:collapse; width:100%; }}
+  td, th {{ border:1px solid #000; }}
+  .grid {{ margin-top:10px; }}
+  .grid td {{ padding:0; }}
+  .grid .lbl {{ background:#f2f2f2; font-weight:700; font-size:11px; padding:7px 8px;
+    white-space:nowrap; width:1%; }}
+  .grid input {{ width:100%; border:0; background:transparent; padding:9px 8px;
+    font:inherit; font-size:14px; }}
+  .grid input:focus {{ outline:none; background:#eef4ff; }}
+  .grid input[readonly] {{ background:#f7f7f7; font-weight:700; }}
+
+  .hscroll {{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:12px; }}
+  table.meas {{ min-width:760px; }}
+  table.meas th {{ background:#d9d9d9; font-size:11px; font-weight:700; padding:5px 4px;
+    text-align:center; line-height:1.15; }}
+  table.meas td {{ padding:0; }}
+  table.meas input, table.meas select {{ width:100%; border:0; background:transparent;
+    padding:11px 6px; font:inherit; font-size:14px; }}
+  table.meas input:focus, table.meas select:focus {{ outline:none; background:#eef4ff; }}
+  table.meas td:first-child input {{ text-align:left; }}
+  table.meas input {{ text-align:center; }}
+  .acc {{ text-align:center; font-weight:700; }}
+  /* column widths */
+  .meas col.c-desc {{ width:30%; }}
+  .meas col.c-sm {{ width:14%; }}
+  .meas col.c-xs {{ width:9%; }}
+
+  .addrow {{ margin-top:8px; }}
+  .addrow button {{ background:#fff; border:1px dashed #1f3fae; color:#1f3fae;
+    font-weight:700; padding:9px 14px; border-radius:6px; cursor:pointer; font:inherit; font-size:13px; }}
+
+  table.result {{ margin-top:14px; }}
+  table.result .lbl {{ background:#f2f2f2; font-weight:700; font-size:11px;
+    padding:8px; white-space:nowrap; text-align:center; }}
+  table.result td {{ text-align:center; }}
+  .yn {{ border:0; background:transparent; padding:9px 6px; font:inherit; font-size:15px;
+    font-weight:700; text-align:center; width:100%; }}
+  .yn:focus {{ outline:none; background:#eef4ff; }}
+
+  table.sign {{ margin-top:14px; }}
+  table.sign th {{ background:#d9d9d9; font-size:12px; padding:7px; }}
+  table.sign .lbl {{ background:#f2f2f2; font-weight:700; font-size:11px; padding:8px;
+    white-space:nowrap; width:1%; }}
+  table.sign input, table.sign select.cellsel {{ width:100%; border:0; background:transparent;
+    padding:9px 8px; font:inherit; font-size:14px; }}
+  table.sign input:focus, table.sign select.cellsel:focus {{ outline:none; background:#eef4ff; }}
+  .sig input {{ font-style:italic; color:#1f3fae; font-size:16px; }}
+
+  .submit-bar {{ max-width:880px; margin:16px auto 0; }}
+  .submit-bar button {{ width:100%; padding:15px; border:none; border-radius:8px;
+    background:#1f3fae; color:#fff; font-weight:700; font-size:16px; cursor:pointer; font:inherit; }}
+  .submit-bar button:active {{ transform:translateY(1px); }}
+  .hint {{ max-width:880px; margin:8px auto 0; font-size:12px; color:#555; text-align:center; }}
+  .reqd {{ color:#c0392b; }}
 </style>
-"""
+</head>
+<body>
+<form method="post" action="{action}" onsubmit="return packRows()">
+  <div class="sheet">
+    <div class="logo-band"><img src="{logo}" alt="Everton Construction &amp; Engineering"/></div>
+    <div class="title-band">INSPECTION REPORT</div>
+
+    <table class="grid">
+      <tr>
+        <td class="lbl">CERTIFICATE NUMBER</td>
+        <td><input name="certificate_number" value="{_hv(h['certificate_number'])}" readonly/></td>
+        <td class="lbl">DATE</td>
+        <td><input name="date" value="{_hv(h['date'])}"/></td>
+      </tr>
+      <tr>
+        <td class="lbl">CUSTOMER</td>
+        <td><input name="customer" value="{_hv(h['customer'])}"/></td>
+        <td class="lbl">JOB NO</td>
+        <td><input name="job_no" value="{_hv(h['job_no'])}"/></td>
+      </tr>
+      <tr>
+        <td class="lbl">JOB DESC</td>
+        <td><input name="job_desc" value="{_hv(h['job_desc'])}"/></td>
+        <td class="lbl">QCP NO</td>
+        <td><input name="qcp_no" value="{_hv(h['qcp_no'])}"/></td>
+      </tr>
+      <tr>
+        <td class="lbl">DRAWING NUMBER</td>
+        <td><input name="drawing_number" value="{_hv(h['drawing_number'])}"/></td>
+        <td class="lbl">EVE JOB</td>
+        <td><input name="eve_job" value="{_hv(h['eve_job'])}"/></td>
+      </tr>
+      <tr>
+        <td class="lbl">QUANTITY</td>
+        <td><input name="quantity" value="{_hv(h['quantity'])}"/></td>
+        <td class="lbl"></td>
+        <td><input disabled/></td>
+      </tr>
+    </table>
+
+    <div class="hscroll">
+      <table class="meas">
+        <colgroup>
+          <col class="c-desc"/><col class="c-sm"/><col class="c-sm"/>
+          <col class="c-xs"/><col class="c-xs"/><col class="c-sm"/><col class="c-xs"/>
+        </colgroup>
+        <thead>
+          <tr>
+            <th rowspan="2">DESCRIPTION</th>
+            <th>DRAWING</th><th>DRAWING</th>
+            <th colspan="2">ACTUAL SIZE</th>
+            <th rowspan="2">FINISHED</th>
+            <th>ACCEPT</th>
+          </tr>
+          <tr>
+            <th>SIZE TOL (1)</th><th>SIZE TOL (2)</th>
+            <th>REQ</th><th>ACT</th>
+            <th>YES / NO</th>
+          </tr>
+        </thead>
+        <tbody id="rows">{rows}</tbody>
+      </table>
+    </div>
+    <div class="addrow"><button type="button" onclick="addRow()">+ Add row</button></div>
+
+    <table class="result">
+      <tr>
+        <td class="lbl">QCP-PASS</td><td>{_yn_select("qcp_pass")}</td>
+        <td class="lbl">QC-REJECT</td><td>{_yn_select("qc_reject")}</td>
+        <td class="lbl">REWORK</td><td>{_yn_select("rework")}</td>
+      </tr>
+    </table>
+
+    <table class="sign">
+      <tr><th>INSPECTION EVERTON</th><th>CUSTOMER</th></tr>
+      <tr>
+        <td><table><tr><td class="lbl">NAME <span class="reqd">*</span></td><td>{_inspector_select("inspector_name")}</td></tr></table></td>
+        <td><table><tr><td class="lbl">NAME</td><td><input name="customer_signed_name"/></td></tr></table></td>
+      </tr>
+      <tr>
+        <td><table><tr><td class="lbl">DATE</td><td><input name="inspector_date" value="{_hv(h['date'])}"/></td></tr></table></td>
+        <td><table><tr><td class="lbl">DATE</td><td><input name="customer_date"/></td></tr></table></td>
+      </tr>
+      <tr>
+        <td class="sig"><table><tr><td class="lbl">SIGNATURE</td><td><input name="inspector_sign" placeholder="Type name"/></td></tr></table></td>
+        <td class="sig"><table><tr><td class="lbl">SIGNATURE</td><td><input name="customer_sign" placeholder="Type name"/></td></tr></table></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="submit-bar"><button type="submit">Submit &amp; file to job</button></div>
+  <div class="hint">On submit this files straight to the job's documents.</div>
+  <input type="hidden" name="items_json" id="items_json"/>
+</form>
+
+<template id="rowtpl">{_meas_row()}</template>
+<script>
+  var tbody = document.getElementById('rows');
+  var tpl = document.getElementById('rowtpl');
+  function addRow() {{
+    tbody.appendChild(tpl.content.cloneNode(true));
+  }}
+  function packRows() {{
+    var out = [];
+    tbody.querySelectorAll('tr').forEach(function(tr){{
+      var o = {{}}, any = false;
+      tr.querySelectorAll('[data-k]').forEach(function(el){{
+        var v = (el.value || '').trim();
+        o[el.getAttribute('data-k')] = v;
+        if (v) any = true;
+      }});
+      if (any) out.push(o);
+    }});
+    document.getElementById('items_json').value = JSON.stringify(out);
+    var insp = document.querySelector('[name=inspector_name]');
+    if (insp && !insp.value) {{ alert('Please select the inspector (Inspection Everton · NAME).'); insp.focus(); return false; }}
+    // Mirror the typed inspector signature from the name if left blank.
+    var sign = document.querySelector('[name=inspector_sign]');
+    if (sign && !sign.value && insp) {{ sign.value = insp.value; }}
+    return true;
+  }}
+</script>
+</body>
+</html>"""
 
 
 @router.get("/inspection-report/{token}", response_class=HTMLResponse)
@@ -368,10 +500,25 @@ async def report_form(token: str, db: AsyncSession = Depends(get_db)):
         return HTMLResponse(_already_page(job, report))
 
     h = _job_header_defaults(job, report.certificate_number)
-    page = _form_page(token, job, h)
-    # Inject the extra CSS just before </head>.
-    page = page.replace("</style>\n</head>", "</style>" + _EXTRA_CSS + "</head>", 1)
-    return HTMLResponse(page)
+    return HTMLResponse(_form_html(token, job, h))
+
+
+@router.get("/inspection-report/{token}/logo.png")
+async def report_logo(token: str, db: AsyncSession = Depends(get_db)):
+    """Serve the Everton logo for the public form (validated by token)."""
+    exists = await db.scalar(
+        select(InspectionReport.id).where(InspectionReport.token == token)
+    )
+    if not exists:
+        raise HTTPException(status_code=404, detail="Not found")
+    logo = inspection_report_service.LOGO_PATH
+    if not logo.exists():
+        raise HTTPException(status_code=404, detail="Logo not found")
+    return Response(
+        content=logo.read_bytes(),
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 def _already_page(job: Job, report: InspectionReport) -> str:
@@ -450,9 +597,9 @@ async def report_submit(
         "qc_reject": g("qc_reject"),
         "rework": g("rework"),
         "inspector_name": inspector,
-        "date": header["date"],
-        "customer_signed_name": g("customer_signed_name"),
-        "customer_date": "",
+        "date": g("inspector_date") or header["date"],
+        "customer_signed_name": g("customer_sign") or g("customer_signed_name"),
+        "customer_date": g("customer_date"),
     }
     report_data = {"header": header, "items": items, "signoff": signoff}
 
