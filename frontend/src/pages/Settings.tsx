@@ -12,8 +12,10 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   Grid,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -124,6 +126,17 @@ export default function Settings() {
       reload();
     } catch (err) {
       setError(apiError(err, 'Failed to upload logo'));
+    }
+  };
+
+  const toggleBackupBeforeUpdate = async (value: boolean) => {
+    setS((prev) => (prev ? { ...prev, backup_before_update: value } : prev));
+    try {
+      const updated = await updateSettings({ backup_before_update: value });
+      setS(updated);
+    } catch (e) {
+      setError(apiError(e, 'Could not change the backup setting'));
+      load();
     }
   };
 
@@ -419,7 +432,7 @@ export default function Settings() {
               Software Updates
             </Typography>
             <Typography variant="caption" sx={{ opacity: 0.85 }}>
-              Secure in-app updates · automatic backup &amp; restart
+              Secure in-app updates · optional rollback backup · auto restart
             </Typography>
           </Box>
           <Chip
@@ -501,6 +514,38 @@ export default function Settings() {
               </Box>
             </Grid>
           </Grid>
+
+          <Box
+            sx={{
+              mb: 2,
+              p: 2,
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'action.hover',
+            }}
+          >
+            <FormControlLabel
+              sx={{ m: 0, alignItems: 'flex-start' }}
+              control={
+                <Switch
+                  checked={s.backup_before_update ?? true}
+                  onChange={(e) => toggleBackupBeforeUpdate(e.target.checked)}
+                  disabled={!isAdmin}
+                />
+              }
+              label={
+                <Box sx={{ ml: 1 }}>
+                  <Typography fontWeight={700}>Back up before updating</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {s.backup_before_update ?? true
+                      ? `On — takes a rollback backup first, keeping only the newest ${s.backup_keep ?? 2} (older ones are pruned, so storage won't pile up).`
+                      : 'Off — updates run without a backup. Take a manual backup below whenever you want one.'}
+                  </Typography>
+                </Box>
+              }
+            />
+          </Box>
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
             <Button

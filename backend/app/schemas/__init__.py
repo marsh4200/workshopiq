@@ -73,6 +73,8 @@ class SettingsOut(BaseModel):
     github_repo_url: Optional[str] = None
     current_version: str
     available_version: Optional[str] = None
+    backup_before_update: bool = True
+    backup_keep: int = 2
 
 
 class SettingsUpdate(BaseModel):
@@ -86,6 +88,8 @@ class SettingsUpdate(BaseModel):
     email_from: Optional[str] = None
     whatsapp_country_code: Optional[str] = None
     github_repo_url: Optional[str] = None
+    backup_before_update: Optional[bool] = None
+    backup_keep: Optional[int] = None
 
 
 # ---------- Samba network-drive backup ----------

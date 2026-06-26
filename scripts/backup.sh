@@ -40,3 +40,17 @@ tar czf "$OUT" -C "$WORK" database.sql uploads.tar.gz
 rm -rf "$WORK"
 
 echo "==> Backup written to: $OUT"
+
+# --- Retention -------------------------------------------------------------
+# Keep only the newest BACKUP_KEEP archives so update backups don't pile up
+# forever and eat disk. Set BACKUP_KEEP=0 to disable pruning (keep everything).
+KEEP="${BACKUP_KEEP:-2}"
+if [ "$KEEP" -gt 0 ] 2>/dev/null; then
+  OLD="$(ls -1t "${BACKUP_DIR}"/workshopiq-backup-*.tar.gz 2>/dev/null | tail -n +"$((KEEP + 1))" || true)"
+  if [ -n "$OLD" ]; then
+    echo "==> Pruning old backups (keeping newest ${KEEP}):"
+    echo "$OLD" | while IFS= read -r f; do
+      [ -n "$f" ] && rm -f "$f" && echo "    removed $(basename "$f")"
+    done
+  fi
+fi

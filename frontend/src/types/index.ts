@@ -159,6 +159,8 @@ export interface AppSettings {
   github_repo_url?: string | null;
   current_version: string;
   available_version?: string | null;
+  backup_before_update?: boolean;
+  backup_keep?: number;
 }
 
 export interface SambaStatus {

@@ -27,20 +27,32 @@ MARKER=".update-requested"
 vol_sh() { docker run --rm -v "${VOLUME}:/data" alpine sh -c "$1" 2>/dev/null || true; }
 
 marker_present() { docker run --rm -v "${VOLUME}:/data:ro" alpine sh -c "[ -f /data/${MARKER} ]" 2>/dev/null; }
+marker_content() { docker run --rm -v "${VOLUME}:/data:ro" alpine sh -c "cat /data/${MARKER} 2>/dev/null" 2>/dev/null || true; }
 clear_marker()   { vol_sh "rm -f /data/${MARKER}"; }
 set_status()     { vol_sh "printf '%s' '$1' > /data/.update-status"; }
 reset_log()      { vol_sh "echo '[$(date '+%H:%M:%S')] $1' > /data/.update-log"; }
 log()            { echo "$1"; vol_sh "echo '[$(date '+%H:%M:%S')] $1' >> /data/.update-log"; }
 
 do_update() {
+  # $1 = backup mode: "on" (default) creates a pre-update safety backup that is
+  # auto-pruned to the newest few; "off" skips the backup entirely (update only,
+  # you take manual backups yourself). The choice comes from the in-app
+  # "Back up before updating" toggle (passed via the request marker), or from a
+  # --no-backup flag on a manual run.
+  local backup_mode="${1:-on}"
+
   set_status "running"
   reset_log "Update started"
 
-  log "Backing up database and uploads..."
-  if bash "${ROOT_DIR}/scripts/backup.sh" >/dev/null 2>&1; then
-    log "Backup complete."
+  if [ "$backup_mode" = "off" ]; then
+    log "Backup skipped — 'Back up before updating' is off. Running update only."
   else
-    log "WARNING: backup failed, continuing."
+    log "Backing up database and uploads (rollback safety)..."
+    if BACKUP_KEEP="${BACKUP_KEEP:-2}" bash "${ROOT_DIR}/scripts/backup.sh" >/dev/null 2>&1; then
+      log "Backup complete. Keeping the newest ${BACKUP_KEEP:-2}; older ones pruned."
+    else
+      log "WARNING: backup failed, continuing."
+    fi
   fi
 
   log "This software has been created on custom code."
@@ -84,6 +96,13 @@ do_update() {
     log "Containers rebuilt and restarted."
   else
     log "ERROR: rebuild failed."
+    if [ "$backup_mode" != "off" ]; then
+      LAST_BACKUP="$(ls -1t "${ROOT_DIR}/backups"/workshopiq-backup-*.tar.gz 2>/dev/null | head -n1 || true)"
+      if [ -n "$LAST_BACKUP" ]; then
+        log "Your pre-update backup is safe at: $(basename "$LAST_BACKUP")"
+        log "Restore it from Settings → Backup & Restore if needed."
+      fi
+    fi
     set_status "error"
     clear_marker
     return 1
@@ -103,7 +122,14 @@ if [ "${1:-}" = "--watch" ]; then
   while true; do
     if marker_present; then
       echo "==> [$(date '+%F %T')] Update request detected."
-      do_update || echo "ERROR: update failed."
+      # The marker content carries the backup choice: "update-nobackup" = skip
+      # the pre-update backup (update only); anything else = back up first.
+      REQ="$(marker_content)"
+      if [ "$REQ" = "update-nobackup" ]; then
+        do_update "off" || echo "ERROR: update failed."
+      else
+        do_update "on" || echo "ERROR: update failed."
+      fi
       # An update may have replaced THIS script with newer logic. Re-exec the
       # freshly-checked-out update.sh so its changes take effect immediately —
       # no manual `systemctl restart` needed after an updater change. `exec`
@@ -114,6 +140,8 @@ if [ "${1:-}" = "--watch" ]; then
     fi
     sleep 15
   done
+elif [ "${1:-}" = "--no-backup" ]; then
+  do_update "off"
 else
-  do_update
+  do_update "on"
 fi

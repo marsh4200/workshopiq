@@ -27,6 +27,10 @@ DEFAULTS = {
     "github_repo_url": "https://github.com/marsh4200/workshopiq",
     "current_version": app_settings.APP_VERSION,
     "available_version": "",
+    # Update behaviour: whether to take a (self-pruning) backup before applying
+    # an update, and how many backups to keep on disk.
+    "backup_before_update": "1",
+    "backup_keep": "2",
     # Samba network-drive backup
     "smb_server": "",
     "smb_share": "",

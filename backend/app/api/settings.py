@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.models import User
 from app.schemas import SettingsOut, SettingsUpdate
 from app.services import file_service
-from app.services.settings_service import get_all_settings, set_setting
+from app.services.settings_service import get_all_settings, get_setting, set_setting
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -33,6 +33,9 @@ async def _build_settings_out(db: AsyncSession) -> SettingsOut:
         github_repo_url=s.get("github_repo_url") or None,
         current_version=s.get("current_version", app_settings.APP_VERSION),
         available_version=s.get("available_version") or None,
+        backup_before_update=str(s.get("backup_before_update", "1")).lower()
+        not in ("0", "false", "no", ""),
+        backup_keep=int(s.get("backup_keep", "2") or 2),
     )
 
 
@@ -52,6 +55,8 @@ async def update_settings(
 ):
     fields = payload.model_dump(exclude_none=True)
     for key, value in fields.items():
+        if isinstance(value, bool):
+            value = "1" if value else "0"
         await set_setting(db, key, str(value))
     await db.commit()
     return await _build_settings_out(db)
@@ -175,9 +180,17 @@ async def apply_update(
     privileged Docker access.
     """
     try:
+        pref = await get_setting(db, "backup_before_update", "1")
+        do_backup = str(pref).lower() not in ("0", "false", "no", "")
+        marker = "update" if do_backup else "update-nobackup"
         (UPLOAD_DIR / ".update-status").write_text("queued")
-        (UPLOAD_DIR / ".update-log").write_text("[queued] Update requested. Waiting for the update service…\n")
-        (UPLOAD_DIR / ".update-requested").write_text("update")
+        seed = (
+            "[queued] Update requested. Waiting for the update service…\n"
+            if do_backup
+            else "[queued] Update requested (update only, no backup). Waiting for the update service…\n"
+        )
+        (UPLOAD_DIR / ".update-log").write_text(seed)
+        (UPLOAD_DIR / ".update-requested").write_text(marker)
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Could not request update: {exc}")
     return {
