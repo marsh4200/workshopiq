@@ -2,6 +2,8 @@ import axios from 'axios';
 import { getToken, clearToken } from './token';
 import type {
   AppSettings,
+  BackupJobStart,
+  BackupProgress,
   CheckinStatus,
   Customer,
   DashboardStats,
@@ -221,6 +223,35 @@ export const uploadLogo = async (file: File) => {
 };
 
 // Backup & restore (admin)
+export const startBackup = async () =>
+  (await api.post<BackupJobStart>('/settings/backup/start')).data;
+
+export const getBackupProgress = async (jobId: string) =>
+  (await api.get<BackupProgress>(`/settings/backup/progress/${jobId}`)).data;
+
+const saveBlob = (data: Blob, name: string) => {
+  const url = URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
+// Download the finished backup zip for a completed job.
+export const downloadBackupResult = async (jobId: string, fallbackName?: string) => {
+  const res = await api.get(`/settings/backup/download/${jobId}`, {
+    responseType: 'blob',
+    timeout: 600000,
+  });
+  const cd = res.headers['content-disposition'] || '';
+  const match = /filename="?([^"]+)"?/.exec(cd);
+  const name = match?.[1] || fallbackName || `workshopiq-backup-${Date.now()}.zip`;
+  saveBlob(res.data as Blob, name);
+};
+
 export const downloadBackup = async () => {
   const res = await api.get('/settings/backup', { responseType: 'blob', timeout: 600000 });
   const cd = res.headers['content-disposition'] || '';

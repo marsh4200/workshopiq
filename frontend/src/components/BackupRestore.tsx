@@ -9,33 +9,69 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  LinearProgress,
   Stack,
   Typography,
 } from '@mui/material';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import RestoreIcon from '@mui/icons-material/SettingsBackupRestore';
-import { downloadBackup, restoreBackup, apiError } from '../api/client';
+import {
+  startBackup,
+  getBackupProgress,
+  downloadBackupResult,
+  restoreBackup,
+  apiError,
+} from '../api/client';
 
 export default function BackupRestore() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [percent, setPercent] = useState(0);
+  const [phase, setPhase] = useState('');
   const [restoring, setRestoring] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [confirmText, setConfirmText] = useState('');
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
 
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
   const handleDownload = async () => {
     setDownloading(true);
     setError('');
     setMsg('');
+    setPercent(0);
+    setPhase('Starting…');
     try {
-      await downloadBackup();
-      setMsg('Backup downloaded. Keep it somewhere safe.');
+      const { job_id } = await startBackup();
+      // Poll progress until the build is done (or fails).
+      // Generous cap (~10 min) for large upload sets.
+      for (let i = 0; i < 850; i++) {
+        await sleep(700);
+        let p;
+        try {
+          p = await getBackupProgress(job_id);
+        } catch {
+          continue; // a poll may briefly hit a worker before the file syncs
+        }
+        setPercent(p.percent || 0);
+        setPhase(p.phase || '');
+        if (p.state === 'error') {
+          throw new Error(p.error || 'Backup failed');
+        }
+        if (p.state === 'done') {
+          setPhase('Downloading…');
+          await downloadBackupResult(job_id, p.filename || undefined);
+          setMsg('Backup downloaded. Keep it somewhere safe.');
+          break;
+        }
+      }
     } catch (e) {
       setError(apiError(e, 'Backup failed'));
     } finally {
       setDownloading(false);
+      setPercent(0);
+      setPhase('');
     }
   };
 
@@ -108,6 +144,24 @@ export default function BackupRestore() {
           onChange={pickFile}
         />
       </Stack>
+
+      {downloading && (
+        <Box sx={{ mt: 2 }}>
+          <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              {phase || 'Preparing backup…'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" fontWeight={700}>
+              {percent}%
+            </Typography>
+          </Stack>
+          <LinearProgress
+            variant={percent > 0 ? 'determinate' : 'indeterminate'}
+            value={percent}
+            sx={{ height: 8, borderRadius: 4 }}
+          />
+        </Box>
+      )}
 
       <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
         A backup captures everything — all jobs, users, settings, reviews and every

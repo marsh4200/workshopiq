@@ -70,8 +70,28 @@ async def collect_database(db: AsyncSession) -> tuple[dict, dict]:
     return data, counts
 
 
-def write_archive(database: dict, counts: dict, app_version: str) -> str:
-    """Write the backup zip to a temp file (sync; run in a thread). Returns path."""
+def write_archive(
+    database: dict,
+    counts: dict,
+    app_version: str,
+    dest_path: str | None = None,
+    progress=None,
+) -> str:
+    """Write the backup zip (sync; run in a thread). Returns the path.
+
+    ``dest_path`` — write to this exact path instead of a random temp file
+    (used by the progress-tracked job flow so any worker can serve it).
+    ``progress`` — optional ``callback(percent: int, stage: str)`` invoked as
+    the database and each uploaded file are written, so the UI can show a real
+    progress bar instead of an indeterminate spinner.
+    """
+    def _p(pct: int, stage: str) -> None:
+        if progress:
+            try:
+                progress(pct, stage)
+            except Exception:  # noqa: BLE001 — progress must never break a backup
+                pass
+
     manifest = {
         "format": FORMAT,
         "format_version": FORMAT_VERSION,
@@ -79,17 +99,37 @@ def write_archive(database: dict, counts: dict, app_version: str) -> str:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "counts": counts,
     }
-    fd, path = tempfile.mkstemp(prefix="workshopiq-backup-", suffix=".zip")
-    os.close(fd)
+    if dest_path:
+        path = dest_path
+    else:
+        fd, path = tempfile.mkstemp(prefix="workshopiq-backup-", suffix=".zip")
+        os.close(fd)
+
+    # Enumerate upload files up front so progress can be proportional.
+    upload_files = []
+    if UPLOAD_ROOT.exists():
+        upload_files = [
+            item
+            for item in UPLOAD_ROOT.iterdir()
+            if item.is_file() and item.name not in CONTROL_FILES
+        ]
+    total = len(upload_files)
+
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        _p(8, "Writing database")
         zf.writestr("manifest.json", json.dumps(manifest, indent=2))
         zf.writestr(
             "database.json", json.dumps(database, default=_json_default, indent=0)
         )
-        if UPLOAD_ROOT.exists():
-            for item in UPLOAD_ROOT.iterdir():
-                if item.is_file() and item.name not in CONTROL_FILES:
-                    zf.write(item, arcname=f"uploads/{item.name}")
+        if total == 0:
+            _p(95, "No uploads to archive")
+        for i, item in enumerate(upload_files, start=1):
+            zf.write(item, arcname=f"uploads/{item.name}")
+            # Uploads span 20%→95% of the bar.
+            pct = 20 + int(75 * i / total)
+            if i == 1 or i == total or i % 5 == 0:
+                _p(pct, f"Archiving files ({i}/{total})")
+    _p(99, "Finalising")
     return path
 
 

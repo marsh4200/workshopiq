@@ -206,6 +206,20 @@ export interface SambaBackupProgress {
   error?: string | null;
 }
 
+export interface BackupJobStart {
+  ok: boolean;
+  job_id: string;
+}
+
+export interface BackupProgress {
+  state: 'running' | 'done' | 'error';
+  percent: number;
+  phase: string;
+  filename?: string | null;
+  size?: number | null;
+  error?: string | null;
+}
+
 export interface DashboardStats {
   received: number;
   machining: number;

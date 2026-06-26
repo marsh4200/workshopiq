@@ -1,5 +1,9 @@
 """Full-system backup & restore endpoints (administrator only)."""
-import tempfile
+import asyncio
+import json
+import os
+import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -11,11 +15,17 @@ from starlette.background import BackgroundTask
 
 from app.api.deps import require_admin
 from app.core.config import settings as app_settings
-from app.core.database import get_db
+from app.core.database import AsyncSessionLocal, get_db
 from app.models import User
 from app.services import backup_service
 
 router = APIRouter(prefix="/settings", tags=["backup"])
+
+# Job workspace lives in the uploads volume so any uvicorn worker can read a
+# job's progress file and serve its finished zip (progress is written by the
+# worker that runs the build; downloads/polls may land on a different worker).
+JOBS_DIR = Path(app_settings.UPLOAD_DIR) / ".backup-jobs"
+JOB_TTL_SECONDS = 3600  # tidy up abandoned jobs after an hour
 
 # Bundled Android app. Lives under app/static so it is COPYed into the backend
 # image and travels with every git-tag deploy (no separate volume needed).
@@ -63,6 +73,124 @@ def _cleanup(path: str) -> None:
         os.remove(path)
     except OSError:
         pass
+
+
+# ----------------------- progress-tracked backup (job flow) -----------------------
+def _job_paths(job_id: str) -> tuple[Path, Path]:
+    safe = "".join(c for c in job_id if c.isalnum() or c in "-_")
+    return JOBS_DIR / f"{safe}.json", JOBS_DIR / f"{safe}.zip"
+
+
+def _write_progress(job_id: str, **fields) -> None:
+    JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    prog, _ = _job_paths(job_id)
+    try:
+        prog.write_text(json.dumps(fields))
+    except OSError:
+        pass
+
+
+def _read_progress(job_id: str) -> dict | None:
+    prog, _ = _job_paths(job_id)
+    try:
+        if prog.exists():
+            return json.loads(prog.read_text())
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+def _sweep_old_jobs() -> None:
+    """Best-effort cleanup of stale job files left by abandoned backups."""
+    if not JOBS_DIR.exists():
+        return
+    cutoff = time.time() - JOB_TTL_SECONDS
+    for item in JOBS_DIR.iterdir():
+        try:
+            if item.stat().st_mtime < cutoff:
+                item.unlink()
+        except OSError:
+            pass
+
+
+async def _run_backup_job(job_id: str) -> None:
+    """Build the backup in the background, streaming progress to the job file."""
+    _, zip_path = _job_paths(job_id)
+    try:
+        _write_progress(job_id, state="running", percent=3, phase="Reading database")
+        async with AsyncSessionLocal() as db:
+            database, counts = await backup_service.collect_database(db)
+        _write_progress(job_id, state="running", percent=18, phase="Database read")
+
+        def on_progress(pct: int, stage: str) -> None:
+            _write_progress(job_id, state="running", percent=pct, phase=stage)
+
+        await run_in_threadpool(
+            backup_service.write_archive,
+            database,
+            counts,
+            app_settings.APP_VERSION,
+            str(zip_path),
+            on_progress,
+        )
+        size = zip_path.stat().st_size if zip_path.exists() else 0
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        _write_progress(
+            job_id,
+            state="done",
+            percent=100,
+            phase="Backup ready",
+            filename=f"workshopiq-backup-{stamp}.zip",
+            size=size,
+        )
+    except Exception as exc:  # noqa: BLE001 — surface any failure to the UI
+        _write_progress(job_id, state="error", percent=0, phase="Failed", error=str(exc))
+        try:
+            if zip_path.exists():
+                zip_path.unlink()
+        except OSError:
+            pass
+
+
+@router.post("/backup/start")
+async def start_backup(_: User = Depends(require_admin)):
+    """Kick off a backup build and return a job id to poll for progress."""
+    _sweep_old_jobs()
+    job_id = uuid.uuid4().hex
+    _write_progress(job_id, state="running", percent=0, phase="Starting…")
+    asyncio.create_task(_run_backup_job(job_id))
+    return {"ok": True, "job_id": job_id}
+
+
+@router.get("/backup/progress/{job_id}")
+async def backup_progress(job_id: str, _: User = Depends(require_admin)):
+    prog = _read_progress(job_id)
+    if prog is None:
+        raise HTTPException(status_code=404, detail="Unknown or expired backup job")
+    return prog
+
+
+@router.get("/backup/download/{job_id}")
+async def download_backup_job(job_id: str, _: User = Depends(require_admin)):
+    prog = _read_progress(job_id)
+    prog_path, zip_path = _job_paths(job_id)
+    if prog is None or prog.get("state") != "done" or not zip_path.exists():
+        raise HTTPException(status_code=409, detail="Backup is not ready")
+    filename = prog.get("filename") or "workshopiq-backup.zip"
+
+    def _cleanup_job() -> None:
+        for p in (zip_path, prog_path):
+            try:
+                p.unlink()
+            except OSError:
+                pass
+
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=filename,
+        background=BackgroundTask(_cleanup_job),
+    )
 
 
 @router.post("/restore")
