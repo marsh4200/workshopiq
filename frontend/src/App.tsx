@@ -8,6 +8,7 @@ import Jobs from './pages/Jobs';
 import NewJob from './pages/NewJob';
 import JobDetail from './pages/JobDetail';
 import NCRs from './pages/NCRs';
+import ClosureRequests from './pages/ClosureRequests';
 import InspectionReports from './pages/InspectionReports';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
@@ -45,6 +46,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={['administrator', 'staff']}>
               <NCRs />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/closure-requests"
+          element={
+            <ProtectedRoute roles={['administrator']}>
+              <ClosureRequests />
             </ProtectedRoute>
           }
         />

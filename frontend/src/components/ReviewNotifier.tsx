@@ -107,6 +107,15 @@ function AdminClosureAlert() {
               ? ` ${more} other closure request${more === 1 ? '' : 's'} also pending.`
               : ''}
           </Typography>
+          {more > 0 && (
+            <Button
+              size="small"
+              sx={{ alignSelf: 'flex-start', mt: 0.5, px: 0 }}
+              onClick={() => navigate('/closure-requests')}
+            >
+              View all closure requests
+            </Button>
+          )}
         </Stack>
       </Alert>
     </Box>

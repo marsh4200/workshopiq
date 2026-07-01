@@ -1,8 +1,9 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Alert,
   AppBar,
   Avatar,
+  Badge,
   Box,
   Chip,
   Divider,
@@ -25,6 +26,7 @@ import AddIcon from '@mui/icons-material/AddCircleOutline';
 import PeopleIcon from '@mui/icons-material/GroupOutlined';
 import ChecklistIcon from '@mui/icons-material/FactCheckOutlined';
 import QrCodeIcon from '@mui/icons-material/QrCode2';
+import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import SettingsIcon from '@mui/icons-material/TuneOutlined';
 import PaletteIcon from '@mui/icons-material/Brightness6Outlined';
 import LightModeIcon from '@mui/icons-material/LightModeOutlined';
@@ -43,6 +45,7 @@ import { useThemeMode } from '../context/ThemeModeContext';
 import { Logomark } from './common';
 import { useDeviceType } from '../hooks/useDeviceType';
 import ReviewNotifier from './ReviewNotifier';
+import { getPendingClosures } from '../api/client';
 import { fontDisplay, fontMono } from '../theme/theme';
 
 const DRAWER = 262;
@@ -71,6 +74,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'Administration',
     items: [
+      { label: 'Closure Requests', icon: <GavelOutlinedIcon />, path: '/closure-requests', roles: ['administrator'] },
       { label: 'Inspection Templates', icon: <ChecklistIcon />, path: '/templates', roles: ['administrator'] },
       { label: 'Users', icon: <PeopleIcon />, path: '/users', roles: ['administrator'] },
       { label: 'Samba', icon: <StorageIcon />, path: '/samba', roles: ['administrator'] },
@@ -88,6 +92,25 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const [denyMsg, setDenyMsg] = useState('');
+  const [closureCount, setClosureCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    const poll = () => {
+      getPendingClosures()
+        .then((items) => {
+          if (!cancelled) setClosureCount(items.length);
+        })
+        .catch(() => undefined);
+    };
+    poll();
+    const id = setInterval(poll, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [isAdmin]);
   // Soft refresh for the APK / installed app, where there's no browser reload.
   // Bumping this key remounts the routed page so its data re-fetches — no full
   // page reload, the session and bundle stay put.
@@ -167,7 +190,13 @@ export default function Layout() {
                       }}
                     >
                       <ListItemIcon sx={{ color: active ? 'primary.main' : 'text.secondary', minWidth: 38 }}>
-                        {item.icon}
+                        {item.path === '/closure-requests' && closureCount > 0 ? (
+                          <Badge badgeContent={closureCount} color="warning">
+                            {item.icon}
+                          </Badge>
+                        ) : (
+                          item.icon
+                        )}
                       </ListItemIcon>
                       <ListItemText
                         primaryTypographyProps={{ fontWeight: active ? 700 : 500, fontSize: 14 }}
