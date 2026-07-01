@@ -2460,6 +2460,72 @@ function FinalInspectionTab({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog
+        open={closureOpen}
+        onClose={() => !busy && setClosureOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Request closure?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary" sx={{ mb: 1.5 }}>
+            This asks an admin to pass the final inspection internally, without a
+            client sign-off. They'll get a heads-up and can approve or decline it.
+          </Typography>
+          <TextField
+            label="Reason (optional)"
+            size="small"
+            fullWidth
+            multiline
+            minRows={2}
+            autoFocus
+            value={closureReason}
+            onChange={(e) => setClosureReason(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setClosureOpen(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={submitClosureRequest} disabled={busy}>
+            {busy ? 'Requesting…' : 'Request closure'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={rejectOpen}
+        onClose={() => !busy && setRejectOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Reject closure request?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary" sx={{ mb: 1.5 }}>
+            The job is left exactly where it is. Staff can re-request closure or run
+            the normal client inspection.
+          </Typography>
+          <TextField
+            label="Reason (optional)"
+            size="small"
+            fullWidth
+            multiline
+            minRows={2}
+            autoFocus
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setRejectOpen(false)} disabled={busy}>
+            Back
+          </Button>
+          <Button variant="contained" color="error" onClick={doRejectClosure} disabled={busy}>
+            {busy ? 'Rejecting…' : 'Reject'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
