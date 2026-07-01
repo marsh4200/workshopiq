@@ -2101,9 +2101,9 @@ function FinalInspectionTab({
             {isAdmin ? (
               <>
                 <Typography color="text.secondary">
-                  Approving passes the final inspection internally (no client sign-off)
-                  and moves the job to Completed; the customer review then unlocks.
-                  Rejecting leaves the job exactly where it is.
+                  Approving passes the final inspection internally (no client
+                  sign-off) and moves the job straight to Closed. Rejecting
+                  leaves the job exactly where it is.
                 </Typography>
                 <Stack direction="row" spacing={1} justifyContent="flex-end">
                   <Button

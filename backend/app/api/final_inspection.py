@@ -632,7 +632,9 @@ async def approve_closure(
         )
     )
     await log_event(db, job_id, "final_inspection", detail, user)
-    await _set_status(db, job, COMPLETED_STATUS, user)
+    # Closure bypasses the client entirely, so there's no review coming to move
+    # it Completed -> Closed the normal way — go straight to Closed.
+    await _set_status(db, job, "Closed", user)
 
     await db.commit()
     return await _get_fi_with_log(db, job_id)
