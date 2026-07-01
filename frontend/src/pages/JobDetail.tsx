@@ -71,6 +71,7 @@ import {
   requestReview,
   getFinalInspection,
   releaseFinalInspection,
+  cancelFinalInspection,
   submitFinalInspection,
   failFinalInspection,
   requestClosure,
@@ -1900,6 +1901,20 @@ function FinalInspectionTab({
     }
   };
 
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const cancelRelease = async () => {
+    setBusy(true);
+    try {
+      await cancelFinalInspection(job.id);
+      await onUpdate();
+      setConfirmCancel(false);
+    } catch (e) {
+      setError(apiError(e, 'Could not cancel the inspection'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submitPass = async () => {
     if (!name.trim()) return;
     setBusy(true);
@@ -2301,9 +2316,21 @@ function FinalInspectionTab({
               <Divider sx={{ width: '100%' }} />
               <Typography variant="body2" color="text.secondary">
                 If the client won't do the final inspection, request closure. An
-                admin approves it and the inspection is passed internally.
+                admin approves it and the inspection is passed internally. Or, if
+                this was released by mistake or there's no inspector on the
+                client's side yet, cancel it and pull the job back.
               </Typography>
-              {requestClosureButton}
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                {requestClosureButton}
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  onClick={() => setConfirmCancel(true)}
+                  disabled={busy}
+                >
+                  Cancel inspection
+                </Button>
+              </Stack>
             </Stack>
           </CardContent>
         </Card>
@@ -2406,6 +2433,30 @@ function FinalInspectionTab({
             disabled={!offMachine || busy}
           >
             {busy ? 'Submitting…' : 'Confirm & submit'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmCancel}
+        onClose={() => !busy && setConfirmCancel(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Cancel this inspection?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary">
+            {fi && fi.attempts > 0
+              ? 'This puts the job back where it was before it was sent for re-inspection (Inspection Failed), keeping the failure on record.'
+              : 'This pulls the job out of the Inspection stage and back to Machining. You can release it again later, or request closure instead.'}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setConfirmCancel(false)} disabled={busy}>
+            Back
+          </Button>
+          <Button variant="contained" color="error" onClick={cancelRelease} disabled={busy}>
+            {busy ? 'Cancelling…' : 'Cancel inspection'}
           </Button>
         </DialogActions>
       </Dialog>

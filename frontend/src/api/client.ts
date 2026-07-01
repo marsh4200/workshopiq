@@ -336,6 +336,8 @@ export const getFinalInspection = async (jobId: number) =>
   (await api.get<FinalInspection | null>(`/jobs/${jobId}/final-inspection`)).data;
 export const releaseFinalInspection = async (jobId: number) =>
   (await api.post<FinalInspection>(`/jobs/${jobId}/final-inspection`)).data;
+export const cancelFinalInspection = async (jobId: number) =>
+  (await api.post<FinalInspection | null>(`/jobs/${jobId}/final-inspection/cancel`)).data;
 export const submitFinalInspection = async (
   jobId: number,
   body: { inspector_name: string; internal_reference?: string },

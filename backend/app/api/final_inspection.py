@@ -174,6 +174,64 @@ async def release_final_inspection(
     return await _get_fi_with_log(db, job_id)
 
 
+@router.post(
+    "/jobs/{job_id}/final-inspection/cancel",
+    response_model=FinalInspectionOut | None,
+)
+async def cancel_final_inspection(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+):
+    """Un-release a final inspection that's sitting with the client unactioned.
+
+    Covers the "released but no inspector on the client's side" case: staff
+    pull the job back out of the Inspection stage so they can either fix
+    something first or request closure instead. Not allowed once the client
+    has actually passed it, while a closure request is pending admin review,
+    or while it's mid-way through a client-side fail.
+    """
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    fi = await _get_fi(db, job_id)
+    if not fi or fi.completed:
+        raise HTTPException(
+            status_code=409, detail="There's no released inspection to cancel."
+        )
+    if fi.closure_status == CLOSURE_PENDING:
+        raise HTTPException(
+            status_code=409,
+            detail="A closure request is pending — approve or reject that first.",
+        )
+    if fi.result == "failed":
+        raise HTTPException(
+            status_code=409,
+            detail="This inspection was already failed by the client — send it "
+            "for re-inspection or request closure instead of cancelling.",
+        )
+
+    if fi.attempts > 0:
+        # This release was a re-inspection after an earlier client failure —
+        # cancelling puts it back exactly where that failure left it, keeping
+        # the failure history intact.
+        fi.result = "failed"
+        await log_event(
+            db, job_id, "final_inspection", "Re-inspection cancelled", user
+        )
+        await _set_status(db, job, FAILED_STATUS, user)
+        await db.commit()
+        return await _get_fi_with_log(db, job_id)
+
+    # First-time release, never failed, nothing logged yet — fully undo it.
+    await log_event(db, job_id, "final_inspection", "Final inspection cancelled", user)
+    await db.delete(fi)
+    await _set_status(db, job, "Machining", user)
+    await db.commit()
+    return None
+
+
 @router.get("/final-inspection/pending", response_model=list[PendingInspectionItem])
 async def pending_final_inspections(
     db: AsyncSession = Depends(get_db),
