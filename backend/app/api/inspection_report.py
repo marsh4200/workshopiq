@@ -220,6 +220,31 @@ def _hv(value: str) -> str:
     return html.escape(value or "", quote=True)
 
 
+def _ta(name: str = "", value: str = "", *, data_k: str = "", css: str = "",
+        placeholder: str = "", extra: str = "") -> str:
+    """Auto-growing single-row textarea, used instead of a plain text
+    ``<input>`` for every free-text field on the form (not just DESCRIPTION):
+    any of these can end up with more than a short word or two in it — a
+    customer name, a drawing number, a signature — and a fixed single-line
+    input just scrolls the extra text out of view. This grows to fit
+    whatever's typed (see the autoGrow() delegation in the page script),
+    and behaves exactly like a normal single-line box until content
+    actually needs the extra room.
+    """
+    attrs = ['data-autogrow', 'rows="1"']
+    if name:
+        attrs.append(f'name="{name}"')
+    if data_k:
+        attrs.append(f'data-k="{data_k}"')
+    if css:
+        attrs.append(f'class="{css}"')
+    if placeholder:
+        attrs.append(f'placeholder="{_hv(placeholder)}"')
+    if extra:
+        attrs.append(extra)
+    return f'<textarea {" ".join(attrs)}>{_hv(value)}</textarea>'
+
+
 def _accept_select() -> str:
     return (
         '<select data-k="accept" class="acc">'
@@ -249,15 +274,21 @@ def _inspector_select(name: str) -> str:
 
 
 def _meas_row() -> str:
-    """One measurement table row (matches the sheet's columns)."""
+    """One measurement table row (matches the sheet's columns).
+
+    Every cell is an auto-growing textarea rather than a single-line input —
+    DESCRIPTION most often needs the room, but a tolerance or a finished-size
+    note can run long too, and all of them now grow instead of scrolling out
+    of view.
+    """
     return (
         "<tr>"
-        '<td><input data-k="description"/></td>'
-        '<td><input data-k="tol1"/></td>'
-        '<td><input data-k="tol2"/></td>'
-        '<td><input data-k="req"/></td>'
-        '<td><input data-k="act"/></td>'
-        '<td><input data-k="finished"/></td>'
+        f'<td>{_ta(data_k="description", css="desc")}</td>'
+        f'<td>{_ta(data_k="tol1")}</td>'
+        f'<td>{_ta(data_k="tol2")}</td>'
+        f'<td>{_ta(data_k="req")}</td>'
+        f'<td>{_ta(data_k="act")}</td>'
+        f'<td>{_ta(data_k="finished")}</td>'
         f"<td>{_accept_select()}</td>"
         "</tr>"
     )
@@ -293,21 +324,23 @@ def _form_html(token: str, job: Job, h: dict) -> str:
   .grid td {{ padding:0; }}
   .grid .lbl {{ background:#f2f2f2; font-weight:700; font-size:11px; padding:7px 8px;
     white-space:nowrap; width:1%; }}
-  .grid input {{ width:100%; border:0; background:transparent; padding:9px 8px;
+  .grid input, .grid textarea {{ width:100%; border:0; background:transparent; padding:9px 8px;
     font:inherit; font-size:14px; }}
-  .grid input:focus {{ outline:none; background:#eef4ff; }}
+  .grid input:focus, .grid textarea:focus {{ outline:none; background:#eef4ff; }}
   .grid input[readonly] {{ background:#f7f7f7; font-weight:700; }}
+  .grid textarea {{ resize:none; overflow:hidden; display:block; line-height:1.3; }}
 
   .hscroll {{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:12px; }}
   table.meas {{ min-width:760px; }}
   table.meas th {{ background:#d9d9d9; font-size:11px; font-weight:700; padding:5px 4px;
     text-align:center; line-height:1.15; }}
   table.meas td {{ padding:0; }}
-  table.meas input, table.meas select {{ width:100%; border:0; background:transparent;
-    padding:11px 6px; font:inherit; font-size:14px; }}
-  table.meas input:focus, table.meas select:focus {{ outline:none; background:#eef4ff; }}
-  table.meas td:first-child input {{ text-align:left; }}
-  table.meas input {{ text-align:center; }}
+  table.meas input, table.meas select, table.meas textarea {{ width:100%; border:0;
+    background:transparent; padding:11px 6px; font:inherit; font-size:14px; text-align:center; }}
+  table.meas input:focus, table.meas select:focus, table.meas textarea:focus {{
+    outline:none; background:#eef4ff; }}
+  table.meas textarea {{ resize:none; overflow:hidden; display:block; line-height:1.3; }}
+  table.meas textarea.desc {{ text-align:left; }}
   .acc {{ text-align:center; font-weight:700; }}
   /* column widths */
   .meas col.c-desc {{ width:30%; }}
@@ -330,10 +363,12 @@ def _form_html(token: str, job: Job, h: dict) -> str:
   table.sign th {{ background:#d9d9d9; font-size:12px; padding:7px; }}
   table.sign .lbl {{ background:#f2f2f2; font-weight:700; font-size:11px; padding:8px;
     white-space:nowrap; width:1%; }}
-  table.sign input, table.sign select.cellsel {{ width:100%; border:0; background:transparent;
-    padding:9px 8px; font:inherit; font-size:14px; }}
-  table.sign input:focus, table.sign select.cellsel:focus {{ outline:none; background:#eef4ff; }}
-  .sig input {{ font-style:italic; color:#1f3fae; font-size:16px; }}
+  table.sign input, table.sign textarea, table.sign select.cellsel {{ width:100%; border:0;
+    background:transparent; padding:9px 8px; font:inherit; font-size:14px; }}
+  table.sign input:focus, table.sign textarea:focus, table.sign select.cellsel:focus {{
+    outline:none; background:#eef4ff; }}
+  table.sign textarea {{ resize:none; overflow:hidden; display:block; line-height:1.3; }}
+  .sig input, .sig textarea {{ font-style:italic; color:#1f3fae; font-size:16px; }}
 
   .submit-bar {{ max-width:880px; margin:16px auto 0; }}
   .submit-bar button {{ width:100%; padding:15px; border:none; border-radius:8px;
@@ -354,29 +389,29 @@ def _form_html(token: str, job: Job, h: dict) -> str:
         <td class="lbl">CERTIFICATE NUMBER</td>
         <td><input name="certificate_number" value="{_hv(h['certificate_number'])}" readonly/></td>
         <td class="lbl">DATE</td>
-        <td><input name="date" value="{_hv(h['date'])}"/></td>
+        <td>{_ta("date", h['date'])}</td>
       </tr>
       <tr>
         <td class="lbl">CUSTOMER</td>
-        <td><input name="customer" value="{_hv(h['customer'])}"/></td>
+        <td>{_ta("customer", h['customer'])}</td>
         <td class="lbl">JOB NO</td>
-        <td><input name="job_no" value="{_hv(h['job_no'])}"/></td>
+        <td>{_ta("job_no", h['job_no'])}</td>
       </tr>
       <tr>
         <td class="lbl">JOB DESC</td>
-        <td><input name="job_desc" value="{_hv(h['job_desc'])}"/></td>
+        <td>{_ta("job_desc", h['job_desc'])}</td>
         <td class="lbl">QCP NO</td>
-        <td><input name="qcp_no" value="{_hv(h['qcp_no'])}"/></td>
+        <td>{_ta("qcp_no", h['qcp_no'])}</td>
       </tr>
       <tr>
         <td class="lbl">DRAWING NUMBER</td>
-        <td><input name="drawing_number" value="{_hv(h['drawing_number'])}"/></td>
+        <td>{_ta("drawing_number", h['drawing_number'])}</td>
         <td class="lbl">EVE JOB</td>
-        <td><input name="eve_job" value="{_hv(h['eve_job'])}"/></td>
+        <td>{_ta("eve_job", h['eve_job'])}</td>
       </tr>
       <tr>
         <td class="lbl">QUANTITY</td>
-        <td><input name="quantity" value="{_hv(h['quantity'])}"/></td>
+        <td>{_ta("quantity", h['quantity'])}</td>
         <td class="lbl"></td>
         <td><input disabled/></td>
       </tr>
@@ -419,15 +454,15 @@ def _form_html(token: str, job: Job, h: dict) -> str:
       <tr><th>INSPECTION EVERTON</th><th>CUSTOMER</th></tr>
       <tr>
         <td><table><tr><td class="lbl">NAME <span class="reqd">*</span></td><td>{_inspector_select("inspector_name")}</td></tr></table></td>
-        <td><table><tr><td class="lbl">NAME</td><td><input name="customer_signed_name"/></td></tr></table></td>
+        <td><table><tr><td class="lbl">NAME</td><td>{_ta("customer_signed_name")}</td></tr></table></td>
       </tr>
       <tr>
-        <td><table><tr><td class="lbl">DATE</td><td><input name="inspector_date" value="{_hv(h['date'])}"/></td></tr></table></td>
-        <td><table><tr><td class="lbl">DATE</td><td><input name="customer_date"/></td></tr></table></td>
+        <td><table><tr><td class="lbl">DATE</td><td>{_ta("inspector_date", h['date'])}</td></tr></table></td>
+        <td><table><tr><td class="lbl">DATE</td><td>{_ta("customer_date")}</td></tr></table></td>
       </tr>
       <tr>
-        <td class="sig"><table><tr><td class="lbl">SIGNATURE</td><td><input name="inspector_sign" placeholder="Type name"/></td></tr></table></td>
-        <td class="sig"><table><tr><td class="lbl">SIGNATURE</td><td><input name="customer_sign" placeholder="Type name"/></td></tr></table></td>
+        <td class="sig"><table><tr><td class="lbl">SIGNATURE</td><td>{_ta("inspector_sign", placeholder="Type name")}</td></tr></table></td>
+        <td class="sig"><table><tr><td class="lbl">SIGNATURE</td><td>{_ta("customer_sign", placeholder="Type name")}</td></tr></table></td>
       </tr>
     </table>
   </div>
@@ -444,6 +479,17 @@ def _form_html(token: str, job: Job, h: dict) -> str:
   function addRow() {{
     tbody.appendChild(tpl.content.cloneNode(true));
   }}
+  // Description fields are auto-growing textareas so long text stays fully
+  // visible instead of scrolling out of a single-line box. Delegated on the
+  // form so it also covers rows added later via addRow().
+  function autoGrow(el) {{
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }}
+  document.querySelector('form').addEventListener('input', function(e) {{
+    if (e.target.matches && e.target.matches('textarea[data-autogrow]')) autoGrow(e.target);
+  }});
+  document.querySelectorAll('textarea[data-autogrow]').forEach(autoGrow);
   function packRows() {{
     var out = [];
     tbody.querySelectorAll('tr').forEach(function(tr){{
