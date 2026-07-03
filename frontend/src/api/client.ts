@@ -406,7 +406,8 @@ export const listTrainingRecords = async () =>
   (await api.get<TrainingRecordItem[]>('/training-records')).data;
 
 export const createTrainingRecord = async (payload: {
-  user_id: number;
+  worker_name: string;
+  user_id?: number | null;
   topics: string[];
   signature_png: string;
   notes?: string;

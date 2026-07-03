@@ -4,6 +4,12 @@ trained on which parts of WorkshopIQ, captured with a drawn signature.
 Not a gate on anything else in the app; it's purely a compliance record for
 store day sign-offs, so staff can log a session and admins can pull a report
 of who's been trained on what.
+
+Workers being trained are frequently workshop floor staff (e.g. Kevin,
+Sammy, Hendrick) who don't have a WorkshopIQ login at all — training records
+aren't tied to user accounts. `worker_name` is always the source of truth;
+`user_id` is only set as a convenience link when the person happens to also
+be a system user (staff/admin).
 """
 import json
 
@@ -20,7 +26,8 @@ router = APIRouter(prefix="/training-records", tags=["training"])
 
 
 class TrainingRecordCreate(BaseModel):
-    user_id: int
+    worker_name: str
+    user_id: int | None = None
     topics: list[str]
     signature_png: str
     notes: str | None = None
@@ -50,8 +57,15 @@ async def list_workers(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_staff),
 ):
-    """Active staff + admin users, for the sign-off form's worker dropdown."""
-    rows = (
+    """Names for the sign-off form's worker picker.
+
+    Combines active staff/admin logins with every worker name that's ever
+    been typed into a training record before — that second group is how
+    floor staff with no WorkshopIQ account (Kevin, Sammy, Hendrick, etc.)
+    show up and stay selectable on repeat visits, without needing a
+    separate employee roster to maintain.
+    """
+    users = (
         await db.execute(
             select(User)
             .where(User.role.in_([UserRole.administrator.value, UserRole.staff.value]))
@@ -59,7 +73,24 @@ async def list_workers(
             .order_by(User.full_name)
         )
     ).scalars().all()
-    return [{"id": u.id, "full_name": u.full_name or u.username} for u in rows]
+
+    seen: set[str] = set()
+    workers: list[dict] = []
+    for u in users:
+        name = u.full_name or u.username
+        workers.append({"id": u.id, "full_name": name})
+        seen.add(name.strip().lower())
+
+    prior_names = (
+        await db.execute(select(TrainingRecord.worker_name).distinct())
+    ).scalars().all()
+    for name in prior_names:
+        if name and name.strip().lower() not in seen:
+            workers.append({"id": None, "full_name": name})
+            seen.add(name.strip().lower())
+
+    workers.sort(key=lambda w: w["full_name"].lower())
+    return workers
 
 
 @router.get("")
@@ -81,18 +112,24 @@ async def create_record(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ):
+    name = payload.worker_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Worker name is required")
     if not payload.topics:
         raise HTTPException(status_code=400, detail="Select at least one topic")
     if not payload.signature_png:
         raise HTTPException(status_code=400, detail="A signature is required")
 
-    worker = await db.get(User, payload.user_id)
-    if not worker:
-        raise HTTPException(status_code=404, detail="Worker not found")
+    linked_user_id: int | None = None
+    if payload.user_id is not None:
+        linked = await db.get(User, payload.user_id)
+        if linked:
+            linked_user_id = linked.id
+            name = linked.full_name or linked.username
 
     record = TrainingRecord(
-        user_id=worker.id,
-        worker_name=worker.full_name or worker.username,
+        user_id=linked_user_id,
+        worker_name=name,
         topics=json.dumps(payload.topics),
         signature_png=payload.signature_png,
         trained_by_id=user.id,

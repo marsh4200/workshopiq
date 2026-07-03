@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Avatar,
   Box,
   Button,
@@ -14,7 +15,6 @@ import {
   FormControlLabel,
   FormGroup,
   IconButton,
-  MenuItem,
   Snackbar,
   Stack,
   Tab,
@@ -172,7 +172,8 @@ function TopicsTab() {
 
 function SignOffTab({ onSaved }: { onSaved: () => void }) {
   const [workers, setWorkers] = useState<TrainableWorker[]>([]);
-  const [workerId, setWorkerId] = useState<number | ''>('');
+  const [worker, setWorker] = useState<TrainableWorker | null>(null);
+  const [workerInput, setWorkerInput] = useState('');
   const [topics, setTopics] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [signature, setSignature] = useState<string | null>(null);
@@ -180,8 +181,12 @@ function SignOffTab({ onSaved }: { onSaved: () => void }) {
   const [toast, setToast] = useState('');
   const [signaturePadKey, setSignaturePadKey] = useState(0);
 
-  useEffect(() => {
+  const loadWorkers = () => {
     listTrainableWorkers().then(setWorkers).catch((e) => setToast(apiError(e, 'Could not load workers')));
+  };
+
+  useEffect(() => {
+    loadWorkers();
   }, []);
 
   const toggleTopic = (id: string) => {
@@ -189,7 +194,8 @@ function SignOffTab({ onSaved }: { onSaved: () => void }) {
   };
 
   const reset = () => {
-    setWorkerId('');
+    setWorker(null);
+    setWorkerInput('');
     setTopics([]);
     setNotes('');
     setSignature(null);
@@ -197,8 +203,9 @@ function SignOffTab({ onSaved }: { onSaved: () => void }) {
   };
 
   const submit = async () => {
-    if (!workerId) {
-      setToast('Select a worker');
+    const name = (worker?.full_name || workerInput).trim();
+    if (!name) {
+      setToast('Enter or select a worker');
       return;
     }
     if (topics.length === 0) {
@@ -211,9 +218,16 @@ function SignOffTab({ onSaved }: { onSaved: () => void }) {
     }
     setSaving(true);
     try {
-      await createTrainingRecord({ user_id: workerId, topics, signature_png: signature, notes: notes || undefined });
+      await createTrainingRecord({
+        worker_name: name,
+        user_id: worker?.id ?? null,
+        topics,
+        signature_png: signature,
+        notes: notes || undefined,
+      });
       setToast('Training record saved');
       reset();
+      loadWorkers();
       onSaved();
     } catch (e) {
       setToast(apiError(e, 'Could not save the record'));
@@ -224,20 +238,27 @@ function SignOffTab({ onSaved }: { onSaved: () => void }) {
 
   return (
     <Box sx={{ maxWidth: 480 }}>
-      <TextField
-        select
-        fullWidth
-        label="Worker"
-        value={workerId}
-        onChange={(e) => setWorkerId(e.target.value ? Number(e.target.value) : '')}
+      <Autocomplete
+        freeSolo
+        options={workers}
+        getOptionLabel={(o) => (typeof o === 'string' ? o : o.full_name)}
+        value={worker}
+        inputValue={workerInput}
+        onInputChange={(_, v) => setWorkerInput(v)}
+        onChange={(_, v) => {
+          if (typeof v === 'string') {
+            setWorker(null);
+            setWorkerInput(v);
+          } else {
+            setWorker(v);
+            setWorkerInput(v?.full_name || '');
+          }
+        }}
+        renderInput={(params) => (
+          <TextField {...params} label="Worker" placeholder="Type a name or pick from the list" />
+        )}
         sx={{ mb: 2.5 }}
-      >
-        {workers.map((w) => (
-          <MenuItem key={w.id} value={w.id}>
-            {w.full_name}
-          </MenuItem>
-        ))}
-      </TextField>
+      />
 
       <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
         Trained on

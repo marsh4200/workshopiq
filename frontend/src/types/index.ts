@@ -395,7 +395,7 @@ export interface InspectionReportDetail extends InspectionReportItem {
 }
 
 export interface TrainableWorker {
-  id: number;
+  id: number | null;
   full_name: string;
 }
 
