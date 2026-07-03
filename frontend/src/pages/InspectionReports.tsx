@@ -34,6 +34,7 @@ import {
   apiError,
   deleteInspectionReport,
   generateInspectionReport,
+  getInspectionReport,
   inspectionReportFormUrl,
   listInspectionReports,
   listJobs,
@@ -98,6 +99,19 @@ export default function InspectionReports() {
       setToast(apiError(e, 'Could not generate report'));
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const showQr = async (r: InspectionReportItem) => {
+    // Show the dialog immediately with the link, then fill in the QR image
+    // once it comes back — the list endpoint doesn't carry qr_png, only
+    // GET /inspection-reports/{id} regenerates it.
+    setQr({ ...r, url: inspectionReportFormUrl(r.token), qr_png: '' } as InspectionReportDetail);
+    try {
+      const detail = await getInspectionReport(r.id);
+      setQr(detail);
+    } catch (e) {
+      setToast(apiError(e, 'Could not load QR code'));
     }
   };
 
@@ -189,13 +203,7 @@ export default function InspectionReports() {
                       <Button
                         size="small"
                         startIcon={<QrCodeIcon />}
-                        onClick={() =>
-                          setQr({
-                            ...r,
-                            url: inspectionReportFormUrl(r.token),
-                            qr_png: '',
-                          } as InspectionReportDetail)
-                        }
+                        onClick={() => showQr(r)}
                       >
                         QR
                       </Button>
@@ -254,16 +262,7 @@ export default function InspectionReports() {
                     ) : (
                       <>
                         <Tooltip title="Show QR code">
-                          <IconButton
-                            size="small"
-                            onClick={() =>
-                              setQr({
-                                ...r,
-                                url: inspectionReportFormUrl(r.token),
-                                qr_png: '',
-                              } as InspectionReportDetail)
-                            }
-                          >
+                          <IconButton size="small" onClick={() => showQr(r)}>
                             <QrCodeIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -332,10 +331,8 @@ export default function InspectionReports() {
               sx={{ width: '100%', maxWidth: 260, display: 'block', mx: 'auto', borderRadius: 2, bgcolor: '#fff', p: 1 }}
             />
           ) : (
-            <Box sx={{ textAlign: 'center', py: 2 }}>
-              <Typography variant="caption" color="text.secondary">
-                Open the link below to fill in the report.
-              </Typography>
+            <Box sx={{ textAlign: 'center', py: 3 }}>
+              <CircularProgress size={28} />
             </Box>
           )}
           <Typography
