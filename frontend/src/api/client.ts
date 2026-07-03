@@ -32,6 +32,8 @@ import type {
   SambaBackupStart,
   SambaBackupProgress,
   Template,
+  TrainableWorker,
+  TrainingRecordItem,
   User,
 } from '../types';
 
@@ -394,6 +396,24 @@ export const deleteInspectionReport = (id: number) =>
 // Public, no-auth form URL the QR points at (also used for "fill on screen").
 export const inspectionReportFormUrl = (token: string) =>
   `${window.location.origin}/api/inspection-report/${token}`;
+
+// Training sign-off records — a compliance trail of who's been trained on
+// which WorkshopIQ topics, with a drawn signature. Not a permission gate.
+export const listTrainableWorkers = async () =>
+  (await api.get<TrainableWorker[]>('/training-records/workers')).data;
+
+export const listTrainingRecords = async () =>
+  (await api.get<TrainingRecordItem[]>('/training-records')).data;
+
+export const createTrainingRecord = async (payload: {
+  user_id: number;
+  topics: string[];
+  signature_png: string;
+  notes?: string;
+}) => (await api.post<TrainingRecordItem>('/training-records', payload)).data;
+
+export const deleteTrainingRecord = (id: number) =>
+  api.delete(`/training-records/${id}`);
 
 // Blank printable sheet (PDF) — opened in a new tab for printing.
 export const openBlankInspectionReport = async () => {

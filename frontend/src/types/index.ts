@@ -393,3 +393,19 @@ export interface InspectionReportDetail extends InspectionReportItem {
   url: string;
   qr_png: string;
 }
+
+export interface TrainableWorker {
+  id: number;
+  full_name: string;
+}
+
+export interface TrainingRecordItem {
+  id: number;
+  user_id: number | null;
+  worker_name: string;
+  topics: string[];
+  signature_png: string;
+  trained_by_name: string;
+  notes?: string | null;
+  created_at: string;
+}

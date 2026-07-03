@@ -623,3 +623,35 @@ class NCR(Base):
     )
 
     job: Mapped["Job | None"] = relationship(back_populates="ncrs")
+
+
+class TrainingRecord(Base):
+    """A signed record that a worker was trained on specific WorkshopIQ topics.
+
+    Captured on a "store day" sign-off: pick the worker, tick which topics
+    they were walked through, and get a drawn signature on screen. This is a
+    compliance/audit trail only — it does not gate access to anything else in
+    the app.
+    """
+
+    __tablename__ = "training_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Snapshot so the record still shows who was trained even if that user
+    # account is later removed.
+    worker_name: Mapped[str] = mapped_column(String(255))
+    # JSON array of topic ids from the frontend's TRAINING_TOPICS list,
+    # e.g. ["qr-checkin", "ncr"].
+    topics: Mapped[str] = mapped_column(Text)
+    # Drawn signature, captured as a base64 PNG data URI from an on-screen
+    # canvas — no separate file storage needed for something this small.
+    signature_png: Mapped[str] = mapped_column(Text)
+    trained_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    trained_by_name: Mapped[str] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

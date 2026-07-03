@@ -24,6 +24,7 @@ from app.api import (
     samba,
     settings as settings_api,
     templates,
+    training,
     users,
 )
 from app.core.bootstrap import run_bootstrap
@@ -98,7 +99,7 @@ async def no_store_api_responses(request: Request, call_next):
         response.headers["X-WIQ-Worker"] = str(os.getpid())
     return response
 
-for r in (auth, users, jobs, costing, customers, templates, dashboard, settings_api, checkin, reports, reviews, final_inspection, ncr, backup, samba, inspection_report):
+for r in (auth, users, jobs, costing, customers, templates, dashboard, settings_api, checkin, reports, reviews, final_inspection, ncr, backup, samba, inspection_report, training):
     app.include_router(r.router, prefix=settings.API_PREFIX)
 
 
