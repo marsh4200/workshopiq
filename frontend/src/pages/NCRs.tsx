@@ -12,6 +12,7 @@ import {
   DialogTitle,
   Grid,
   InputAdornment,
+  LinearProgress,
   MenuItem,
   Stack,
   Table,
@@ -30,6 +31,7 @@ import {
   createNCR,
   deleteNCR,
   fetchNCRMeta,
+  getNCR,
   listJobs,
   listNCRs,
   updateNCR,
@@ -306,6 +308,43 @@ function NCRDialog({
     jobs.find((j) => j.id === existing?.job_id) || null,
   );
   const [busy, setBusy] = useState(false);
+  // The row/card passed in from the list only carries the summary fields
+  // (title, category, severity, status…) — description, root cause,
+  // corrective action, source, disposition and assigned-to are NOT in that
+  // list payload. Without this fetch those fields render blank the moment
+  // you reopen an existing NCR, and saving then overwrites the real values
+  // with empty ones. Fetch the full record here and fill in the rest once
+  // it arrives.
+  const [loadingFull, setLoadingFull] = useState(isEdit);
+
+  useEffect(() => {
+    if (!isEdit || !existingId) return;
+    let cancelled = false;
+    setLoadingFull(true);
+    getNCR(existingId)
+      .then((n) => {
+        if (cancelled) return;
+        setTitle(n.title);
+        setDescription(n.description || '');
+        setCategory(n.category);
+        setSeverity(n.severity);
+        setSource(n.source);
+        setDisposition(n.disposition);
+        setRootCause(n.root_cause || '');
+        setCorrectiveAction(n.corrective_action || '');
+        setAssignedTo(n.assigned_to || '');
+        setStatus(n.status);
+        setJob(jobs.find((j) => j.id === n.job_id) || null);
+      })
+      .catch((e) => setError(apiError(e, 'Could not load the full NCR')))
+      .finally(() => {
+        if (!cancelled) setLoadingFull(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, existingId]);
 
   const valid = title.trim() && description.trim();
 
@@ -370,6 +409,7 @@ function NCRDialog({
       <DialogTitle>
         {isEdit ? `Edit ${existing?.ncr_number}` : 'New NCR'}
       </DialogTitle>
+      {loadingFull && <LinearProgress />}
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           <TextField
@@ -468,7 +508,7 @@ function NCRDialog({
           <Button onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="contained" onClick={save} disabled={busy || !valid}>
+          <Button variant="contained" onClick={save} disabled={busy || loadingFull || !valid}>
             {busy ? 'Saving…' : isEdit ? 'Save' : 'Raise NCR'}
           </Button>
         </Box>
