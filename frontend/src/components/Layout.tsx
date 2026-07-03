@@ -32,6 +32,7 @@ import PaletteIcon from '@mui/icons-material/Brightness6Outlined';
 import LightModeIcon from '@mui/icons-material/LightModeOutlined';
 import DarkModeIcon from '@mui/icons-material/DarkModeOutlined';
 import StorageIcon from '@mui/icons-material/Storage';
+import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import ReportIcon from '@mui/icons-material/AssessmentOutlined';
 import NCRIcon from '@mui/icons-material/ReportProblemOutlined';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -78,6 +79,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { label: 'Inspection Templates', icon: <ChecklistIcon />, path: '/templates', roles: ['administrator'] },
       { label: 'Users', icon: <PeopleIcon />, path: '/users', roles: ['administrator'] },
       { label: 'Samba', icon: <StorageIcon />, path: '/samba', roles: ['administrator'] },
+      { label: 'Training', icon: <SchoolOutlinedIcon />, path: '/training', roles: ['administrator'] },
     ],
   },
 ];

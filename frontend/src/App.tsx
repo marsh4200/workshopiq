@@ -16,6 +16,7 @@ import Templates from './pages/Templates';
 import Settings from './pages/Settings';
 import Appearance from './pages/Appearance';
 import Samba from './pages/Samba';
+import Training from './pages/Training';
 
 export default function App() {
   return (
@@ -96,6 +97,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={['administrator']}>
               <Samba />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/training"
+          element={
+            <ProtectedRoute roles={['administrator']}>
+              <Training />
             </ProtectedRoute>
           }
         />
