@@ -145,7 +145,13 @@ def _header_grid(h: dict, st) -> Table:
         [L("DRAWING NUMBER"), V(h.get("drawing_number", "")), L("QCP NO"), V(h.get("qcp_no", ""))],
         [L("QUANTITY"), V(h.get("quantity", "")), L("EVE JOB"), V(h.get("eve_job", ""))],
     ]
-    t = Table(rows, colWidths=[34 * mm, 56 * mm, 24 * mm, 66 * mm], rowHeights=[8.4 * mm] * 5)
+    # No explicit rowHeights here: a fixed height forces the row to that size
+    # regardless of content, so a long CUSTOMER or JOB DESC value that wraps to
+    # two lines gets clipped and prints over the row below it. Leaving the
+    # height unset lets each row grow to fit its Paragraph, while the
+    # TOP/BOTTOMPADDING below reproduce the same ~8.4mm comfortable height for
+    # the normal single-line case.
+    t = Table(rows, colWidths=[34 * mm, 56 * mm, 24 * mm, 66 * mm])
     t.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.75, LINE),
         ("BACKGROUND", (0, 0), (0, -1), LIGHT),
@@ -154,6 +160,8 @@ def _header_grid(h: dict, st) -> Table:
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
     return t
 
@@ -196,7 +204,14 @@ def _measure_table(items: list[dict], st, *, rows_total: int) -> Table:
             Paragraph(accept, st["tdc"]),
         ])
 
-    row_heights = [HEAD_ROW_H, HEAD_ROW_H] + [BODY_ROW_H] * len(body)
+    # Fixed heights only for the two header rows (never wrap). Body rows are
+    # left unset so a long DESCRIPTION Paragraph can wrap onto a second line
+    # and the row grows to fit it — a fixed BODY_ROW_H forced every row to the
+    # same height regardless of content, so a long description just wrapped
+    # underneath itself and printed into the row below ("overwritten"). The
+    # TOP/BOTTOMPADDING below reproduce the original ~8.4mm comfortable height
+    # for the normal short/blank case.
+    row_heights = [HEAD_ROW_H, HEAD_ROW_H] + [None] * len(body)
     t = Table(data, colWidths=COL_WIDTHS, rowHeights=row_heights, repeatRows=2)
     t.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.75, LINE),
@@ -204,6 +219,8 @@ def _measure_table(items: list[dict], st, *, rows_total: int) -> Table:
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 5),
         ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 2), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 2), (-1, -1), 6),
         ("SPAN", (0, 0), (0, 1)),   # DESCRIPTION
         ("SPAN", (3, 0), (4, 0)),   # ACTUAL SIZE over REQ / ACT
         ("SPAN", (5, 0), (5, 1)),   # FINISHED

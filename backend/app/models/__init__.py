@@ -484,6 +484,10 @@ class FinalInspection(Base):
     # Why the client rejected the most recent attempt (kept for context on the
     # next re-inspection; every failure is also logged to the timeline + notes).
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Optional NCR number relating this failure to a raised non-conformance
+    # report. Free text (not a hard FK) since the NCR may be raised separately
+    # and the reference just needs to point staff at it.
+    ncr_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # How many times the client has rejected this job's final inspection.
     attempts: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -555,6 +559,10 @@ class FinalInspectionAttempt(Base):
     result: Mapped[str] = mapped_column(String(10))  # "passed" | "failed"
     inspector_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Optional NCR number relating this specific failed attempt to a raised
+    # non-conformance report (mirrors FinalInspection.ncr_number, but kept
+    # per-attempt so the full history shows which failure it belonged to).
+    ncr_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     internal_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True

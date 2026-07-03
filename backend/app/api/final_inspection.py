@@ -392,10 +392,12 @@ async def fail_final_inspection(
         raise HTTPException(
             status_code=400, detail="A reason is required to fail the inspection"
         )
+    ncr_number = (payload.ncr_number or "").strip() or None
 
     fi.inspector_name = name
     fi.result = "failed"
     fi.failure_reason = reason
+    fi.ncr_number = ncr_number
     fi.attempts += 1
     fi.failed_by_id = user.id
     fi.failed_at = datetime.now(timezone.utc)
@@ -411,17 +413,23 @@ async def fail_final_inspection(
             result="failed",
             inspector_name=name,
             reason=reason,
+            ncr_number=ncr_number,
             created_by_id=user.id,
         )
     )
 
     # Persist the reason as a numbered note so the order is clear in the notes,
     # and log it to the timeline.
+    note_body = f"Final inspection failed ({ordinal} attempt) by {name}: {reason}"
+    log_detail = note_body
+    if ncr_number:
+        note_body += f" (NCR {ncr_number})"
+        log_detail += f" (NCR {ncr_number})"
     db.add(
         Note(
             job_id=job_id,
             note_type="action",
-            body=f"Final inspection failed ({ordinal} attempt) by {name}: {reason}",
+            body=note_body,
             author_id=user.id,
             author_name=actor_name(user),
         )
@@ -430,7 +438,7 @@ async def fail_final_inspection(
         db,
         job_id,
         "final_inspection",
-        f"Final inspection failed ({ordinal} attempt) by {name}: {reason}",
+        log_detail,
         user,
     )
     await _set_status(db, job, FAILED_STATUS, user)

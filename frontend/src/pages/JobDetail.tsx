@@ -1750,6 +1750,11 @@ function InspectionReport({
                       {failed && a.reason && (
                         <Typography sx={{ whiteSpace: 'pre-wrap' }}>{a.reason}</Typography>
                       )}
+                      {failed && a.ncr_number && (
+                        <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.25 }}>
+                          NCR: {a.ncr_number}
+                        </Typography>
+                      )}
                       {!failed && (
                         <Typography color="text.secondary">
                           Signed off{a.internal_reference ? ` · ref ${a.internal_reference}` : ''}
@@ -1874,6 +1879,7 @@ function FinalInspectionTab({
   const [name, setName] = useState('');
   const [reference, setReference] = useState('');
   const [reason, setReason] = useState('');
+  const [ncrNumber, setNcrNumber] = useState('');
   const [failing, setFailing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmRelease, setConfirmRelease] = useState(false);
@@ -1938,9 +1944,11 @@ function FinalInspectionTab({
       await failFinalInspection(job.id, {
         inspector_name: name.trim(),
         reason: reason.trim(),
+        ncr_number: ncrNumber.trim() || undefined,
       });
       setFailing(false);
       setReason('');
+      setNcrNumber('');
       await onUpdate();
     } catch (e) {
       setError(apiError(e, 'Could not record the failed inspection'));
@@ -2156,6 +2164,11 @@ function FinalInspectionTab({
               <Typography sx={{ whiteSpace: 'pre-wrap' }}>
                 {fi.failure_reason || '—'}
               </Typography>
+              {fi.ncr_number && (
+                <Typography variant="body2" sx={{ mt: 1, fontWeight: 700 }}>
+                  NCR: {fi.ncr_number}
+                </Typography>
+              )}
             </Alert>
             <Typography variant="caption" color="text.secondary">
               Failed by {fi.inspector_name || 'client'}
@@ -2210,6 +2223,11 @@ function FinalInspectionTab({
                   <Typography sx={{ whiteSpace: 'pre-wrap' }}>
                     {fi.failure_reason}
                   </Typography>
+                  {fi.ncr_number && (
+                    <Typography variant="body2" sx={{ mt: 1, fontWeight: 700 }}>
+                      NCR: {fi.ncr_number}
+                    </Typography>
+                  )}
                 </Alert>
               )}
               <Typography color="text.secondary">
@@ -2246,6 +2264,16 @@ function FinalInspectionTab({
                   placeholder="Describe what failed so the workshop can fix it"
                 />
               )}
+              {failing && (
+                <TextField
+                  label="NCR number (optional)"
+                  size="small"
+                  fullWidth
+                  value={ncrNumber}
+                  onChange={(e) => setNcrNumber(e.target.value)}
+                  placeholder="e.g. NCR 0042 — link this failure to a raised NCR"
+                />
+              )}
               {!failing ? (
                 <Stack direction="row" spacing={1} justifyContent="flex-end">
                   <Button
@@ -2272,6 +2300,7 @@ function FinalInspectionTab({
                     onClick={() => {
                       setFailing(false);
                       setReason('');
+                      setNcrNumber('');
                     }}
                     disabled={busy}
                   >
@@ -2310,6 +2339,7 @@ function FinalInspectionTab({
               {isReinspection && fi.failure_reason && (
                 <Typography variant="body2" color="text.secondary">
                   Last failure: {fi.failure_reason}
+                  {fi.ncr_number ? ` · NCR ${fi.ncr_number}` : ''}
                 </Typography>
               )}
               {rejectedNotice}

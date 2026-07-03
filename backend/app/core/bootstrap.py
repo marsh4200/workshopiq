@@ -58,6 +58,9 @@ COLUMN_STATEMENTS = (
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS failed_by_id INTEGER REFERENCES users(id)",
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ",
+    # Optional NCR number relating a failed attempt to a raised non-conformance report.
+    "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS ncr_number VARCHAR(120)",
+    "ALTER TABLE final_inspection_attempts ADD COLUMN IF NOT EXISTS ncr_number VARCHAR(120)",
     # Final-inspection "request for closure" path (admin-approved internal pass).
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS closure_status VARCHAR(10)",
     "ALTER TABLE final_inspections ADD COLUMN IF NOT EXISTS closure_reason TEXT",
