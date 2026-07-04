@@ -164,42 +164,67 @@ export const TRAINING_TOPICS: TrainingTopic[] = [
   },
   {
     id: 'qr-checkin',
-    title: 'QR check-in',
-    subtitle: 'Scanning jobs in and out',
+    title: 'QR machine check-in',
+    subtitle: 'Scan with your phone to put a job on a machine',
     icon: <QrCode2Icon />,
     steps: [
       {
-        label: '1. Open the job',
-        note: "From the job list, tap the job you're starting work on.",
+        label: '1. The QR unlocks after inspection',
+        note: "Every job gets its own one-time check-in QR code. It only becomes available once the job's inspection has been completed — until then the Check-In tab shows a waiting notice.",
         screen: (
           <Screen>
-            <Card accent>EVEJOB 42 · ADMO</Card>
-            <Card>EVEJOB 41 · Baltimore</Card>
-          </Screen>
-        ),
-      },
-      {
-        label: '2. Tap check-in',
-        note: 'On the job page, tap the check-in button to open the scanner.',
-        screen: (
-          <Screen>
-            <Field label="Status" value="Machining" />
-            <div style={{ border: '2px solid currentColor', borderRadius: 8, padding: 8, textAlign: 'center', fontSize: 13 }}>
-              Check in
+            <Field label="Job" value="EVEJOB 42 — ADMO" />
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div
+                style={{
+                  width: 72,
+                  height: 72,
+                  border: '2px solid currentColor',
+                  borderRadius: 8,
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontSize: 10,
+                  opacity: 0.8,
+                }}
+              >
+                QR
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.75 }}>
+                Check-In tab → the job's unique QR code
+              </div>
             </div>
           </Screen>
         ),
       },
       {
-        label: '3. Scan the job QR tag',
-        note: "Point the camera at the QR code on the job traveler or workstation.",
+        label: '2. Print it onto the job card',
+        note: 'Use Print (or Download) on the Check-In tab and attach the QR to the job traveler / paperwork that moves with the work.',
+        screen: (
+          <Screen>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1, border: '2px solid currentColor', borderRadius: 6, padding: 6, textAlign: 'center', fontSize: 12 }}>
+                Print
+              </div>
+              <div style={{ flex: 1, border: '1px solid rgba(127,127,127,0.3)', borderRadius: 6, padding: 6, textAlign: 'center', fontSize: 12 }}>
+                Download
+              </div>
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
+              QR travels with the job to the floor
+            </div>
+          </Screen>
+        ),
+      },
+      {
+        label: '3. Pull out your phone and scan',
+        note: 'When you are about to start the job, open your phone camera and point it at the QR on the job card. No app, no login — the check-in page opens straight in the browser.',
         screen: (
           <Screen>
             <div
               style={{
                 background: '#111',
                 borderRadius: 8,
-                aspectRatio: '1',
+                aspectRatio: '1.4',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -207,18 +232,53 @@ export const TRAINING_TOPICS: TrainingTopic[] = [
                 fontSize: 12,
               }}
             >
-              Scanning…
+              📱 Camera → QR on the job card
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
+              Tap the link that pops up
             </div>
           </Screen>
         ),
       },
       {
-        label: '4. Confirmed',
-        note: 'The job timeline logs the check-in automatically, with the name and time.',
+        label: '4. Pick your name and the machine',
+        note: 'The form shows the job number so you know you scanned the right card. Choose your operator name and the machine you are loading the job onto from the dropdowns.',
+        screen: (
+          <Screen>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Machine check-in — EVEJOB 42</div>
+            <Field label="Operator name" value="Kevin" />
+            <Field label="Machine" value="Gemini Lathe" />
+          </Screen>
+        ),
+      },
+      {
+        label: '5. Tap Check in',
+        note: 'Nothing is recorded until you submit. On submit the job is checked in on that machine and its status moves to Machining automatically.',
+        screen: (
+          <Screen>
+            <div style={{ border: '2px solid currentColor', borderRadius: 8, padding: 8, textAlign: 'center', fontSize: 13, marginBottom: 8 }}>
+              Check in
+            </div>
+            <div>
+              <StatusChip label="Received" />
+              <StatusChip label="Machining" active />
+              <StatusChip label="Inspection" />
+            </div>
+          </Screen>
+        ),
+      },
+      {
+        label: '6. Logged and locked',
+        note: 'The timeline records who checked in, on which machine, and when. The QR is one-time — scanning it again shows "already checked in", and the code on the job page gets a CHECKED IN stamp.',
         screen: (
           <Screen>
             <div style={{ fontSize: 13 }}>✓ Checked in</div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>Kevin checked in · 2 min ago</div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
+              Kevin on Gemini Lathe · 2 min ago
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.55, marginTop: 8 }}>
+              Timeline: Checked in on Gemini Lathe
+            </div>
           </Screen>
         ),
       },

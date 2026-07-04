@@ -243,10 +243,26 @@ const saveBlob = (data: Blob, name: string) => {
 };
 
 // Download the finished backup zip for a completed job.
-export const downloadBackupResult = async (jobId: string, fallbackName?: string) => {
+// ``expectedSize`` — the zip size reported by the build job, used as the
+// progress total when the proxy strips Content-Length from the response.
+// ``onProgress(loaded, total)`` — fires as bytes arrive so the UI bar can
+// track the actual transfer instead of freezing at 100% while it happens.
+export const downloadBackupResult = async (
+  jobId: string,
+  fallbackName?: string,
+  expectedSize?: number,
+  onProgress?: (loaded: number, total?: number) => void,
+) => {
   const res = await api.get(`/settings/backup/download/${jobId}`, {
     responseType: 'blob',
     timeout: 600000,
+    onDownloadProgress: (e) => {
+      if (!onProgress) return;
+      const total =
+        (typeof e.total === 'number' && e.total > 0 ? e.total : undefined) ??
+        (expectedSize && expectedSize > 0 ? expectedSize : undefined);
+      onProgress(e.loaded, total);
+    },
   });
   const cd = res.headers['content-disposition'] || '';
   const match = /filename="?([^"]+)"?/.exec(cd);

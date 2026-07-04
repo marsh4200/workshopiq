@@ -36,6 +36,13 @@ export default function BackupRestore() {
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+  // The bar covers the WHOLE journey: building the zip on the server is
+  // 0–70%, and the actual transfer to this device is 70–100%. It only hits
+  // 100 at the moment the file lands in the browser's downloads — no more
+  // freezing at "100%" while the real download quietly happens.
+  const BUILD_SHARE = 0.7;
+  const fmtMB = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
   const handleDownload = async () => {
     setDownloading(true);
     setError('');
@@ -54,15 +61,34 @@ export default function BackupRestore() {
         } catch {
           continue; // a poll may briefly hit a worker before the file syncs
         }
-        setPercent(p.percent || 0);
+        setPercent(Math.round((p.percent || 0) * BUILD_SHARE));
         setPhase(p.phase || '');
         if (p.state === 'error') {
           throw new Error(p.error || 'Backup failed');
         }
         if (p.state === 'done') {
-          setPhase('Downloading…');
-          await downloadBackupResult(job_id, p.filename || undefined);
+          const expectedSize = p.size || 0;
+          setPercent(Math.round(100 * BUILD_SHARE));
+          setPhase('Downloading backup…');
+          await downloadBackupResult(
+            job_id,
+            p.filename || undefined,
+            expectedSize,
+            (loaded, total) => {
+              if (total && total > 0) {
+                const dl = Math.min(1, loaded / total);
+                setPercent(Math.round(100 * (BUILD_SHARE + (1 - BUILD_SHARE) * dl)));
+                setPhase(`Downloading backup… ${fmtMB(loaded)} of ${fmtMB(total)}`);
+              } else {
+                // No size available — at least show live bytes moving.
+                setPhase(`Downloading backup… ${fmtMB(loaded)}`);
+              }
+            },
+          );
+          setPercent(100);
+          setPhase('Saved to your downloads');
           setMsg('Backup downloaded. Keep it somewhere safe.');
+          await sleep(900); // let the bar visibly land on 100%
           break;
         }
       }
