@@ -6,6 +6,7 @@ import {
   Card,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -29,6 +30,11 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import WorkIcon from '@mui/icons-material/Engineering';
 import FactCheckIcon from '@mui/icons-material/FactCheckOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
+import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
+import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
+import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import { useNavigate } from 'react-router-dom';
 import {
   apiError,
@@ -44,6 +50,23 @@ import { PageHeader, EmptyState, fmtDate } from '../components/common';
 import { useAuth } from '../context/AuthContext';
 import { useDeviceType } from '../hooks/useDeviceType';
 import type { InspectionReportDetail, InspectionReportItem, JobListItem } from '../types';
+
+interface CustomerGroup {
+  key: string;
+  name: string;
+  reports: InspectionReportItem[];
+}
+
+// Newest first: by submitted/created date, then certificate number as a
+// stable fallback.
+function byRecency(a: InspectionReportItem, b: InspectionReportItem): number {
+  const da = Date.parse(a.submitted_at || a.created_at || '') || 0;
+  const db = Date.parse(b.submitted_at || b.created_at || '') || 0;
+  if (da !== db) return db - da;
+  return (b.certificate_number || '').localeCompare(a.certificate_number || '', undefined, {
+    numeric: true,
+  });
+}
 
 function StatusChip({ submitted }: { submitted: boolean }) {
   const color = submitted ? '#22c55e' : '#f59e0b';
@@ -134,6 +157,145 @@ export default function InspectionReports() {
 
   const pendingCount = useMemo(() => reports.filter((r) => !r.submitted).length, [reports]);
 
+  // Which customer folders are open. Keyed by the normalised customer name —
+  // same folder-per-customer pattern as the Jobs page.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  const groups = useMemo<CustomerGroup[]>(() => {
+    const map = new Map<string, CustomerGroup>();
+    for (const r of reports) {
+      const name = (r.customer_name || 'Unassigned').trim() || 'Unassigned';
+      const key = name.toLowerCase();
+      const g = map.get(key);
+      if (g) g.reports.push(r);
+      else map.set(key, { key, name, reports: [r] });
+    }
+    const list = Array.from(map.values());
+    list.forEach((g) => g.reports.sort(byRecency));
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    return list;
+  }, [reports]);
+
+  // A single customer opens by default; the rest start collapsed.
+  const isOpen = (key: string) => open[key] ?? groups.length === 1;
+  const toggle = (key: string) =>
+    setOpen((prev) => ({ ...prev, [key]: !(prev[key] ?? groups.length === 1) }));
+  const setAll = (value: boolean) =>
+    setOpen(Object.fromEntries(groups.map((g) => [g.key, value])));
+
+  const ReportRows = ({ group }: { group: CustomerGroup }) =>
+    isMobile ? (
+      <Stack spacing={1.5} sx={{ p: 1.5, pt: 0.75 }}>
+        {group.reports.map((r) => (
+          <Card key={r.id} variant="outlined" sx={{ p: 1.75, bgcolor: 'background.default' }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography sx={{ fontWeight: 700 }}>{r.certificate_number}</Typography>
+              <StatusChip submitted={r.submitted} />
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {r.job_number}
+            </Typography>
+            {r.submitted ? (
+              <Typography variant="caption" color="text.secondary">
+                {r.inspector_name} · {fmtDate(r.submitted_at)}
+              </Typography>
+            ) : (
+              <Typography variant="caption" color="text.secondary">
+                Created {fmtDate(r.created_at)}
+              </Typography>
+            )}
+            <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
+              {r.submitted ? (
+                <Button size="small" startIcon={<WorkIcon />} onClick={() => navigate(`/jobs/${r.job_id}`)}>
+                  Open job
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    size="small"
+                    startIcon={<QrCodeIcon />}
+                    onClick={() => showQr(r)}
+                  >
+                    QR
+                  </Button>
+                  <Button
+                    size="small"
+                    startIcon={<OpenInNewIcon />}
+                    onClick={() => window.open(inspectionReportFormUrl(r.token), '_blank')}
+                  >
+                    Fill
+                  </Button>
+                  {isAdmin && (
+                    <IconButton size="small" color="error" onClick={() => handleDelete(r.id)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </>
+              )}
+            </Stack>
+          </Card>
+        ))}
+      </Stack>
+    ) : (
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Certificate</TableCell>
+            <TableCell>Job</TableCell>
+            <TableCell>Status</TableCell>
+            <TableCell>Inspector</TableCell>
+            <TableCell>Date</TableCell>
+            <TableCell align="right">Actions</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {group.reports.map((r) => (
+            <TableRow key={r.id} hover>
+              <TableCell sx={{ fontWeight: 600 }}>{r.certificate_number}</TableCell>
+              <TableCell>{r.job_number}</TableCell>
+              <TableCell>
+                <StatusChip submitted={r.submitted} />
+              </TableCell>
+              <TableCell>{r.inspector_name || '—'}</TableCell>
+              <TableCell>{fmtDate(r.submitted_at || r.created_at)}</TableCell>
+              <TableCell align="right">
+                {r.submitted ? (
+                  <Tooltip title="Open job (report is in documents)">
+                    <IconButton size="small" onClick={() => navigate(`/jobs/${r.job_id}`)}>
+                      <WorkIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : (
+                  <>
+                    <Tooltip title="Show QR code">
+                      <IconButton size="small" onClick={() => showQr(r)}>
+                        <QrCodeIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Fill on screen">
+                      <IconButton
+                        size="small"
+                        onClick={() => window.open(inspectionReportFormUrl(r.token), '_blank')}
+                      >
+                        <OpenInNewIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    {isAdmin && (
+                      <Tooltip title="Remove pending report">
+                        <IconButton size="small" color="error" onClick={() => handleDelete(r.id)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
+
   return (
     <Box>
       <PageHeader
@@ -156,140 +318,94 @@ export default function InspectionReports() {
         }
       />
 
-      {pendingCount > 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {pendingCount} pending · {reports.length - pendingCount} filed
-        </Typography>
+      {!loading && groups.length > 0 && (
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+          spacing={1}
+          sx={{ mb: 1.5 }}
+        >
+          <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, alignSelf: 'center' }}>
+            {groups.length} customer{groups.length === 1 ? '' : 's'} · {reports.length} report
+            {reports.length === 1 ? '' : 's'}
+            {pendingCount > 0
+              ? ` · ${pendingCount} pending · ${reports.length - pendingCount} filed`
+              : ''}
+          </Typography>
+          <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-end', sm: 'flex-start' }}>
+            <Button size="small" startIcon={<UnfoldMoreIcon />} onClick={() => setAll(true)}>
+              Expand all
+            </Button>
+            <Button size="small" startIcon={<UnfoldLessIcon />} onClick={() => setAll(false)}>
+              Collapse all
+            </Button>
+          </Stack>
+        </Stack>
       )}
 
-      <Card sx={{ p: { xs: 1.5, sm: 0 } }}>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-            <CircularProgress />
-          </Box>
-        ) : reports.length === 0 ? (
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress />
+        </Box>
+      ) : reports.length === 0 ? (
+        <Card sx={{ p: 2 }}>
           <EmptyState
             icon={<FactCheckIcon sx={{ fontSize: 44, opacity: 0.5 }} />}
             title="No inspection reports yet"
             subtitle="Generate a QR code for a job to get started."
           />
-        ) : isMobile ? (
-          <Stack spacing={1.5} sx={{ p: 0.5 }}>
-            {reports.map((r) => (
-              <Card key={r.id} variant="outlined" sx={{ p: 1.75 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Typography sx={{ fontWeight: 700 }}>{r.certificate_number}</Typography>
-                  <StatusChip submitted={r.submitted} />
-                </Stack>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  {r.job_number} · {r.customer_name}
-                </Typography>
-                {r.submitted ? (
-                  <Typography variant="caption" color="text.secondary">
-                    {r.inspector_name} · {fmtDate(r.submitted_at)}
+        </Card>
+      ) : (
+        <Stack spacing={1.5}>
+          {groups.map((g) => {
+            const expanded = isOpen(g.key);
+            return (
+              <Card key={g.key} sx={{ overflow: 'hidden' }}>
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  spacing={1.5}
+                  onClick={() => toggle(g.key)}
+                  sx={{
+                    px: 2,
+                    py: 1.5,
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                >
+                  <Box sx={{ color: 'primary.main', display: 'flex' }}>
+                    {expanded ? <FolderOpenOutlinedIcon /> : <FolderOutlinedIcon />}
+                  </Box>
+                  <Typography fontWeight={800} sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+                    {g.name}
                   </Typography>
-                ) : (
-                  <Typography variant="caption" color="text.secondary">
-                    Created {fmtDate(r.created_at)}
-                  </Typography>
-                )}
-                <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
-                  {r.submitted ? (
-                    <Button size="small" startIcon={<WorkIcon />} onClick={() => navigate(`/jobs/${r.job_id}`)}>
-                      Open job
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        size="small"
-                        startIcon={<QrCodeIcon />}
-                        onClick={() => showQr(r)}
-                      >
-                        QR
-                      </Button>
-                      <Button
-                        size="small"
-                        startIcon={<OpenInNewIcon />}
-                        onClick={() => window.open(inspectionReportFormUrl(r.token), '_blank')}
-                      >
-                        Fill
-                      </Button>
-                      {isAdmin && (
-                        <IconButton size="small" color="error" onClick={() => handleDelete(r.id)}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                    </>
+                  {g.reports.some((r) => !r.submitted) && (
+                    <Chip
+                      label={`${g.reports.filter((r) => !r.submitted).length} pending`}
+                      size="small"
+                      sx={{ bgcolor: '#f59e0b1f', color: '#f59e0b', fontWeight: 700 }}
+                    />
                   )}
+                  <Chip label={g.reports.length} size="small" sx={{ fontWeight: 700 }} />
+                  <ExpandMoreIcon
+                    sx={{
+                      transition: 'transform 0.2s',
+                      transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      color: 'text.secondary',
+                    }}
+                  />
                 </Stack>
+                <Collapse in={expanded} unmountOnExit>
+                  <Box sx={{ borderTop: 1, borderColor: 'divider' }}>
+                    <ReportRows group={g} />
+                  </Box>
+                </Collapse>
               </Card>
-            ))}
-          </Stack>
-        ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Certificate</TableCell>
-                <TableCell>Job</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Inspector</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {reports.map((r) => (
-                <TableRow key={r.id} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{r.certificate_number}</TableCell>
-                  <TableCell>
-                    {r.job_number}
-                    <Typography variant="caption" display="block" color="text.secondary">
-                      {r.customer_name}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <StatusChip submitted={r.submitted} />
-                  </TableCell>
-                  <TableCell>{r.inspector_name || '—'}</TableCell>
-                  <TableCell>{fmtDate(r.submitted_at || r.created_at)}</TableCell>
-                  <TableCell align="right">
-                    {r.submitted ? (
-                      <Tooltip title="Open job (report is in documents)">
-                        <IconButton size="small" onClick={() => navigate(`/jobs/${r.job_id}`)}>
-                          <WorkIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    ) : (
-                      <>
-                        <Tooltip title="Show QR code">
-                          <IconButton size="small" onClick={() => showQr(r)}>
-                            <QrCodeIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Fill on screen">
-                          <IconButton
-                            size="small"
-                            onClick={() => window.open(inspectionReportFormUrl(r.token), '_blank')}
-                          >
-                            <OpenInNewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        {isAdmin && (
-                          <Tooltip title="Remove pending report">
-                            <IconButton size="small" color="error" onClick={() => handleDelete(r.id)}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
+            );
+          })}
+        </Stack>
+      )}
 
       {/* Generate dialog */}
       <Dialog open={genOpen} onClose={() => setGenOpen(false)} fullWidth maxWidth="sm">

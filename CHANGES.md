@@ -1,31 +1,26 @@
-# WorkshopIQ — Samba auto-backup patch
+# WorkshopIQ — Inspection Reports: doc-delete sync + customer folders
 
-## New files (4)
-- `backend/app/services/samba_service.py` — SMB client (pure-Python smbprotocol): test / push / rotate-keep-2
-- `backend/app/services/samba_scheduler.py` — 6-hourly loop, single-runner via advisory lock + DB timestamp
-- `backend/app/api/samba.py` — `/api/settings/samba` GET/PUT, `/test`, `/backup-now` (admin only)
-- `frontend/src/pages/Samba.tsx` — the Samba tab/page
+## Edited files (2)
+- `backend/app/api/jobs.py` — deleting a filed inspection-report PDF from a
+  job's Documents now also deletes the linked report record, so the
+  Inspection Reports page no longer shows a "Filed" row pointing at a PDF
+  that's gone. A timeline event is logged
+  ("Inspection report ECE-xxxx deleted with its document").
+- `frontend/src/pages/InspectionReports.tsx` — reports are now grouped into
+  one collapsible folder per customer, exactly like the Jobs page (folder
+  icons, count chips, single folder auto-opens, Expand all / Collapse all).
+  Folders with pending reports show an amber "N pending" chip. The redundant
+  customer name was dropped from the rows since the folder is the customer.
 
-## Edited files (8)
-- `backend/app/main.py` — register router + start/stop scheduler in lifespan
-- `backend/app/schemas/__init__.py` — SambaUpdate / SambaStatusOut / SambaConfigOut
-- `backend/app/services/settings_service.py` — new `smb_*` default keys
-- `backend/requirements.txt` — `smbprotocol==1.16.1`  ← **new dependency**
-- `frontend/src/App.tsx` — `/samba` admin route
-- `frontend/src/components/Layout.tsx` — "Samba" nav item (Administration, admin only)
-- `frontend/src/api/client.ts` — getSamba / updateSamba / testSamba / backupNowSamba
-- `frontend/src/types/index.ts` — SambaStatus / SambaUpdate / SambaActionResult
-
-## ⚠️ Must rebuild — not a hot file-drop
-`requirements.txt` gained `smbprotocol`, so the backend image has to rebuild or
-it'll crash on import. Tag a release + run your normal update (which rebuilds),
-don't just drop files onto a running container.
+## Hot file-drop safe
+No new dependencies, no DB migration (uses the existing
+`inspection_reports.document_id` link). Drop the two files in and rebuild
+the frontend as usual.
 
 ## How it works
-- Tab → enter server IP, share name, username, password, optional subfolder.
-- "Test Connection" saves + verifies auth/path. "Back Up Now" pushes immediately.
-- Toggle **Enable automatic backup** (needs server+share). Then every 6h a full
-  backup zip is pushed and the share is trimmed to the newest 2 (`workshopiq-auto-*.zip`).
-  New copy replaces the oldest → always two, ~6h apart.
-- Password is write-only: stored, never sent back. Blank on save = keep existing.
-- Multi-worker safe: only one worker runs each backup (advisory lock + `smb_last_backup_at`).
+- Document delete (admin, job page) → looks up any inspection report whose
+  `document_id` matches the doc, deletes the report row(s), logs to the job
+  timeline, then removes the file + document as before. The certificate
+  number is simply retired; generate a fresh QR to redo the report.
+- Pending (unsubmitted) reports are untouched — they still get removed from
+  the Inspection Reports page itself, same as before.

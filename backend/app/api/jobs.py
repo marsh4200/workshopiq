@@ -21,6 +21,7 @@ from app.models import (
     FinalInspection,
     Inspection,
     InspectionItem,
+    InspectionReport,
     InspectionTemplate,
     Job,
     JobCheckin,
@@ -438,11 +439,31 @@ async def delete_document(
     job_id: int,
     doc_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_admin),
+    user: User = Depends(require_admin),
 ):
     doc = await db.get(Document, doc_id)
     if not doc or doc.job_id != job_id:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # If this document is a filed inspection report, remove the report record
+    # too — otherwise the Inspection Reports page keeps a "Filed" row pointing
+    # at a PDF that no longer exists. Deleting the document IS deleting the
+    # report; the certificate number is simply retired.
+    linked_reports = (
+        await db.execute(
+            select(InspectionReport).where(InspectionReport.document_id == doc_id)
+        )
+    ).scalars().all()
+    for report in linked_reports:
+        await log_event(
+            db,
+            job_id,
+            "inspection_report",
+            f"Inspection report {report.certificate_number} deleted with its document",
+            user,
+        )
+        await db.delete(report)
+
     file_service.delete_file(doc.filename)
     await db.delete(doc)
     await db.commit()
