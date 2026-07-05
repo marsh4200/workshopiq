@@ -203,8 +203,12 @@ export default function Jobs() {
               <StatusBadge status={j.status} />
             </Stack>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
-              {j.component_type ? (
-                <Chip label={j.component_type} size="small" variant="outlined" />
+              {j.component_type || (j.quantity ?? 1) > 1 ? (
+                <Chip
+                  label={`${j.component_type || 'Item'}${(j.quantity ?? 1) > 1 ? ` ×${j.quantity}` : ''}`}
+                  size="small"
+                  variant="outlined"
+                />
               ) : (
                 <span />
               )}
@@ -249,8 +253,12 @@ export default function Jobs() {
             >
               <TableCell sx={{ fontWeight: 700 }}>{j.job_number}</TableCell>
               <TableCell>
-                {j.component_type ? (
-                  <Chip label={j.component_type} size="small" variant="outlined" />
+                {j.component_type || (j.quantity ?? 1) > 1 ? (
+                  <Chip
+                    label={`${j.component_type || 'Item'}${(j.quantity ?? 1) > 1 ? ` ×${j.quantity}` : ''}`}
+                    size="small"
+                    variant="outlined"
+                  />
                 ) : (
                   '—'
                 )}

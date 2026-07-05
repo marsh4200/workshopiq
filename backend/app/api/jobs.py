@@ -156,6 +156,7 @@ async def create_job(
         due_date=payload.due_date,
         description=payload.description,
         component_type=payload.component_type,
+        quantity=max(1, payload.quantity or 1),
         status="Received",
         created_by_id=user.id,
     )
@@ -241,6 +242,9 @@ async def update_job(
         value = getattr(payload, field)
         if value is not None:
             setattr(job, field, value)
+
+    if payload.quantity is not None:
+        job.quantity = max(1, int(payload.quantity))
 
     # due_date is special: allow explicitly clearing it (sending null) — only
     # touch it when the client actually included the field in the request.

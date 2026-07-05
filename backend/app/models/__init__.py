@@ -88,6 +88,8 @@ class Job(Base):
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     component_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # How many identical items came in under this job (default 1).
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(40), default="Received", index=True)
 
     created_by_id: Mapped[int | None] = mapped_column(

@@ -272,6 +272,7 @@ export default function JobDetail() {
         <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
           {job.customer_name}
           {job.component_type ? ` · ${job.component_type}` : ''}
+          {(job.quantity ?? 1) > 1 ? ` · Qty ${job.quantity}` : ''}
         </Typography>
       </Box>
 
@@ -394,6 +395,7 @@ function OverviewTab({
     po_number: job.po_number || '',
     eq_number: job.eq_number || '',
     component_type: job.component_type || '',
+    quantity: String(job.quantity ?? 1),
     due_date: job.due_date || '',
     description: job.description || '',
   });
@@ -442,6 +444,7 @@ function OverviewTab({
     setSaving(true);
     try {
       const body: Record<string, unknown> = { ...form };
+      body.quantity = Math.max(1, parseInt(form.quantity, 10) || 1);
       Object.keys(body).forEach((k) => {
         if (body[k] === '') body[k] = null;
       });
@@ -518,6 +521,9 @@ function OverviewTab({
                   </TextField>
                 </Grid>
                 <Grid item xs={12} sm={6}>
+                  <TextField label="Quantity" type="number" fullWidth inputProps={{ min: 1, step: 1, inputMode: 'numeric' }} value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} />
+                </Grid>
+                <Grid item xs={12} sm={6}>
                   <TextField label="Due Date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} helperText="Optional — leave blank to clear" />
                 </Grid>
                 <Grid item xs={12}>
@@ -534,6 +540,7 @@ function OverviewTab({
                   <Row label="PO Number" value={job.po_number} />
                   <Row label="EQ Number" value={job.eq_number} />
                   <Row label="Component Type" value={job.component_type} />
+                  <Row label="Quantity" value={String(job.quantity ?? 1)} />
                   <Row label="Date Received" value={fmtDay(job.date_received)} />
                   <TableRow>
                     <TableCell sx={{ border: 0, color: 'text.secondary', width: 160, verticalAlign: 'top' }}>

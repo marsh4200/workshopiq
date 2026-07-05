@@ -264,6 +264,7 @@ class JobBase(BaseModel):
     due_date: Optional[date] = None
     description: Optional[str] = None
     component_type: Optional[str] = None
+    quantity: int = 1
 
 
 class JobCreate(JobBase):
@@ -281,6 +282,7 @@ class JobUpdate(BaseModel):
     due_date: Optional[date] = None
     description: Optional[str] = None
     component_type: Optional[str] = None
+    quantity: Optional[int] = None
     status: Optional[str] = None
 
 
@@ -406,6 +408,7 @@ class JobListOut(BaseModel):
     job_number: str
     customer_name: str
     component_type: Optional[str] = None
+    quantity: int = 1
     status: str
     date_received: datetime
     due_date: Optional[date] = None

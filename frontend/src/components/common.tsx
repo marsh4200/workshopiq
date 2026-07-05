@@ -26,12 +26,19 @@ export function StatusBadge({ status }: { status: string }) {
     <Chip
       label={status}
       size="small"
+      icon={
+        <Box
+          component="span"
+          sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color, ml: '4px !important', flexShrink: 0 }}
+        />
+      }
       sx={{
-        bgcolor: `${color}1f`,
+        bgcolor: `${color}17`,
         color,
-        border: `1px solid ${color}3d`,
+        border: `1px solid ${color}38`,
         fontWeight: 600,
-        '& .MuiChip-label': { px: 1.1 },
+        letterSpacing: '0.01em',
+        '& .MuiChip-label': { px: 0.9 },
       }}
     />
   );

@@ -73,6 +73,8 @@ COLUMN_STATEMENTS = (
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eq_number VARCHAR(120)",
     # Optional target/promised completion date.
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS due_date DATE",
+    # Number of identical items received under one job (intake quantity).
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 1",
     # Per-user appearance preference (light / dark / system).
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(10) NOT NULL DEFAULT 'dark'",
     # Most recent successful login timestamp (null until first sign-in).

@@ -3,6 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: workshopiq-db
     restart: unless-stopped
+    # Tuned for an 8GB host: let Postgres keep hot data in memory instead of
+    # the 128MB default. effective_cache_size only informs the query planner.
+    command: postgres -c shared_buffers=1GB -c effective_cache_size=3GB
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-workshopiq}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-workshopiq}

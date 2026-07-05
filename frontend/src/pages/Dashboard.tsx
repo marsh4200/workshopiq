@@ -92,30 +92,43 @@ export default function Dashboard() {
           const value = stats ? (stats as any)[d.key] : 0;
           return (
             <Grid item xs={6} lg={3} key={d.key}>
-              <Card sx={{ '&:hover': { borderColor: `${d.color}66`, transform: 'translateY(-2px)' } }}>
+              <Card
+                sx={{
+                  position: 'relative',
+                  overflow: 'hidden',
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 3,
+                    background: d.color,
+                    opacity: 0.9,
+                  },
+                  '&:hover': { borderColor: `${d.color}66`, transform: 'translateY(-2px)' },
+                }}
+              >
                 <CardActionArea onClick={() => navigate(`/jobs?status=${encodeURIComponent(d.filter)}`)}>
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Box
-                      sx={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: 2.5,
-                        display: 'grid',
-                        placeItems: 'center',
-                        bgcolor: `${d.color}1f`,
-                        color: d.color,
-                        border: `1px solid ${d.color}3d`,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {d.icon}
+                  <CardContent sx={{ py: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75, color: 'text.secondary' }}>
+                      <Box sx={{ display: 'grid', placeItems: 'center', color: d.color, '& svg': { fontSize: 18 } }}>
+                        {d.icon}
+                      </Box>
+                      <Typography
+                        variant="caption"
+                        noWrap
+                        sx={{ fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', fontSize: 11 }}
+                      >
+                        {d.label}
+                      </Typography>
                     </Box>
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ fontFamily: fontMono, fontWeight: 700, fontSize: 30, lineHeight: 1 }}>
+                      <Typography sx={{ fontFamily: fontMono, fontWeight: 700, fontSize: 32, lineHeight: 1 }}>
                         {value}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" noWrap>
-                        {d.label}
+                      <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.5 }}>
+                        {value === 1 ? '1 job' : `${value} jobs`} · tap to view
                       </Typography>
                     </Box>
                   </CardContent>
@@ -125,6 +138,9 @@ export default function Dashboard() {
           );
         })}
 
+      </Grid>
+
+      <Grid container spacing={2.5} sx={{ mt: 0 }}>
         {DUE_DEFS.map((d) => {
           const value = stats ? (stats as any)[d.key] : 0;
           const active = value > 0;
@@ -132,43 +148,29 @@ export default function Dashboard() {
             <Grid item xs={6} lg={3} key={d.key}>
               <Card
                 sx={{
-                  ...(active ? { borderColor: `${d.color}66` } : {}),
-                  '&:hover': { borderColor: `${d.color}66`, transform: 'translateY(-2px)' },
+                  bgcolor: active ? `${d.color}14` : 'transparent',
+                  borderColor: active ? `${d.color}55` : undefined,
+                  '&:hover': { borderColor: `${d.color}66` },
                 }}
               >
                 <CardActionArea onClick={() => navigate(`/jobs?due=${d.due}`)}>
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.25, py: 1.25, '&:last-child': { pb: 1.25 } }}>
                     <Box
                       sx={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: 2.5,
-                        display: 'grid',
-                        placeItems: 'center',
-                        bgcolor: `${d.color}1f`,
-                        color: d.color,
-                        border: `1px solid ${d.color}3d`,
+                        width: 9,
+                        height: 9,
+                        borderRadius: '50%',
+                        bgcolor: active ? d.color : 'text.disabled',
                         flexShrink: 0,
                       }}
+                    />
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{ fontWeight: 600, color: active ? d.color : 'text.secondary' }}
                     >
-                      {d.icon}
-                    </Box>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography
-                        sx={{
-                          fontFamily: fontMono,
-                          fontWeight: 700,
-                          fontSize: 30,
-                          lineHeight: 1,
-                          color: active ? d.color : 'text.primary',
-                        }}
-                      >
-                        {value}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" noWrap>
-                        {d.label}
-                      </Typography>
-                    </Box>
+                      <Box component="span" sx={{ fontFamily: fontMono }}>{value}</Box> {d.label.toLowerCase()}
+                    </Typography>
                   </CardContent>
                 </CardActionArea>
               </Card>

@@ -39,6 +39,7 @@ export default function NewJob() {
     po_number: '',
     eq_number: '',
     component_type: '',
+    quantity: '1',
     date_received: new Date().toISOString().slice(0, 10),
     due_date: '',
     description: '',
@@ -96,6 +97,7 @@ export default function NewJob() {
     try {
       const payload: Record<string, unknown> = {
         ...form,
+        quantity: Math.max(1, parseInt(form.quantity, 10) || 1),
         date_received: form.date_received
           ? new Date(form.date_received).toISOString()
           : undefined,
@@ -218,6 +220,17 @@ export default function NewJob() {
                 </MenuItem>
               ))}
             </TextField>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Quantity"
+              type="number"
+              fullWidth
+              inputProps={{ min: 1, step: 1, inputMode: 'numeric' }}
+              value={form.quantity}
+              onChange={(e) => set('quantity', e.target.value)}
+              helperText="How many identical items came in under this job"
+            />
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField

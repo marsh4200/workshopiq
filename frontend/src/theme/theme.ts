@@ -107,7 +107,7 @@ export function buildTheme(mode: ThemeMode): Theme {
       sidebar: p.sidebar,
       sidebarLine: p.line,
     },
-    shape: { borderRadius: 12 },
+    shape: { borderRadius: 10 },
     typography: {
       fontFamily: fontBody,
       h3: { fontFamily: fontDisplay, fontWeight: 600, letterSpacing: '-0.02em' },
@@ -163,7 +163,7 @@ export function buildTheme(mode: ThemeMode): Theme {
                 ? `linear-gradient(180deg, ${alpha('#1e2a47', 0.35)}, ${alpha('#0e1422', 0.0)})`
                 : 'none',
             border: `1px solid ${p.line}`,
-            borderRadius: 16,
+            borderRadius: 14,
             transition: 'border-color .18s ease, transform .18s ease, box-shadow .18s ease',
           },
         },
@@ -246,7 +246,16 @@ export function buildTheme(mode: ThemeMode): Theme {
       },
       MuiDialog: {
         styleOverrides: {
-          paper: { borderRadius: 16, border: `1px solid ${p.line}` },
+          paper: { borderRadius: 14, border: `1px solid ${p.line}` },
+        },
+      },
+      MuiTableRow: {
+        styleOverrides: {
+          root: {
+            '&.MuiTableRow-hover:hover': {
+              backgroundColor: alpha(p.primary, mode === 'dark' ? 0.07 : 0.05),
+            },
+          },
         },
       },
       MuiListItemButton: {
