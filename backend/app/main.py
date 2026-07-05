@@ -29,6 +29,8 @@ from app.api import (
 )
 from app.core.bootstrap import run_bootstrap
 from app.core.config import settings
+from app.core.security import decode_token
+from app.services.maintenance import MAINTENANCE_MESSAGE, is_maintenance_on
 from app.services.samba_scheduler import scheduler_loop
 
 logging.basicConfig(level=logging.INFO)
@@ -98,6 +100,71 @@ async def no_store_api_responses(request: Request, call_next):
         response.headers["X-WIQ-Instance"] = _INSTANCE_ID
         response.headers["X-WIQ-Worker"] = str(os.getpid())
     return response
+
+
+# ---------------- Maintenance mode ----------------
+# When the admin flips "maintenance_mode" on in Settings, every API request
+# from anyone who is NOT an administrator is refused with a 503 and a friendly
+# message. Admins keep full access so they can work and turn it back off.
+_MAINTENANCE_EXEMPT_PATHS = {
+    f"{settings.API_PREFIX}/auth/login",  # admins must still be able to sign in
+    f"{settings.API_PREFIX}/health",
+}
+
+_MAINTENANCE_HTML = f"""<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Under maintenance</title>
+<style>
+  body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0e16;
+       color:#e2e8f0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}}
+  .card{{max-width:420px;margin:16px;padding:32px;border:1px solid rgba(148,163,184,.18);
+        border-radius:16px;background:#0c1322;text-align:center}}
+  h1{{font-size:20px;margin:0 0 12px}} p{{color:#94a3b8;line-height:1.6;margin:0}}
+  .dot{{font-size:34px;margin-bottom:10px}}
+</style></head><body><div class="card"><div class="dot">🛠️</div>
+<h1>Server under maintenance</h1><p>{MAINTENANCE_MESSAGE}</p>
+</div></body></html>"""
+
+
+def _is_admin_request(request: Request) -> bool:
+    """True if the request carries a valid administrator token (header or ?token=)."""
+    raw = None
+    auth = request.headers.get("Authorization", "")
+    if auth.lower().startswith("bearer "):
+        raw = auth[7:].strip()
+    if not raw:
+        raw = request.query_params.get("token")
+    if not raw:
+        return False
+    payload = decode_token(raw)
+    return bool(payload) and payload.get("role") == "administrator"
+
+
+@app.middleware("http")
+async def maintenance_gate(request: Request, call_next):
+    path = request.url.path
+    if (
+        request.method == "OPTIONS"
+        or not path.startswith(settings.API_PREFIX)
+        or path in _MAINTENANCE_EXEMPT_PATHS
+    ):
+        return await call_next(request)
+    if not await is_maintenance_on():
+        return await call_next(request)
+    if _is_admin_request(request):
+        return await call_next(request)
+    # Non-admin during maintenance. Browser navigations (e.g. the public
+    # inspection-report form or a document link) get a small HTML page;
+    # everything else gets JSON the frontend recognises.
+    from fastapi.responses import HTMLResponse, JSONResponse
+
+    accept = request.headers.get("accept", "")
+    if request.method == "GET" and "text/html" in accept:
+        return HTMLResponse(_MAINTENANCE_HTML, status_code=503)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": MAINTENANCE_MESSAGE, "maintenance": True},
+    )
 
 for r in (auth, users, jobs, costing, customers, templates, dashboard, settings_api, checkin, reports, reviews, final_inspection, ncr, backup, samba, inspection_report, training):
     app.include_router(r.router, prefix=settings.API_PREFIX)

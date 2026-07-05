@@ -58,6 +58,19 @@ api.interceptors.response.use(
       clearToken();
       if (!window.location.pathname.includes('/login')) window.location.href = '/login';
     }
+    // Maintenance mode: the server refuses non-admin requests with a tagged
+    // 503. Drop the session and send the person to the login screen, where a
+    // maintenance banner explains what's going on.
+    const maintData = error.response?.data as { maintenance?: boolean } | undefined;
+    if (
+      error.response?.status === 503 &&
+      maintData?.maintenance &&
+      !error.config?.url?.includes('/auth/login')
+    ) {
+      sessionStorage.setItem('wiq-maintenance', '1');
+      clearToken();
+      if (!window.location.pathname.includes('/login')) window.location.href = '/login';
+    }
     return Promise.reject(error);
   },
 );

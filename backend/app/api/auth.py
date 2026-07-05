@@ -37,6 +37,13 @@ async def login(
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is disabled")
 
+    # Maintenance mode: only administrators may sign in while it's active.
+    if user.role != "administrator":
+        from app.services.maintenance import MAINTENANCE_MESSAGE, is_maintenance_on
+
+        if await is_maintenance_on():
+            raise HTTPException(status_code=503, detail=MAINTENANCE_MESSAGE)
+
     # Record this successful sign-in so admins can see who's active and when
     # each client/staff member last used the system.
     user.last_login_at = utcnow()

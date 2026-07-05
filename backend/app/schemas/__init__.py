@@ -75,6 +75,7 @@ class SettingsOut(BaseModel):
     available_version: Optional[str] = None
     backup_before_update: bool = True
     backup_keep: int = 2
+    maintenance_mode: bool = False
 
 
 class SettingsUpdate(BaseModel):
@@ -90,6 +91,7 @@ class SettingsUpdate(BaseModel):
     github_repo_url: Optional[str] = None
     backup_before_update: Optional[bool] = None
     backup_keep: Optional[int] = None
+    maintenance_mode: Optional[bool] = None
 
 
 # ---------- Samba network-drive backup ----------

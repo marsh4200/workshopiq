@@ -25,6 +25,7 @@ import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
+import BuildIcon from '@mui/icons-material/Build';
 import {
   getSettings,
   updateSettings,
@@ -75,6 +76,30 @@ export default function Settings() {
     { severity: 'success' | 'info' | 'error'; text: string } | null
   >(null);
   const logoInput = useRef<HTMLInputElement>(null);
+  // Hidden maintenance controls — revealed by tapping the faint "· · ·" at the
+  // very bottom of the page (admins only). Auto-revealed while active so the
+  // off switch can never be lost.
+  const [showMaint, setShowMaint] = useState(false);
+  const [maintBusy, setMaintBusy] = useState(false);
+
+  const toggleMaintenance = async (on: boolean) => {
+    setMaintBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      const updated = await updateSettings({ maintenance_mode: on });
+      setS(updated);
+      setMsg(
+        on
+          ? 'Maintenance mode is ON — staff and clients are now locked out.'
+          : 'Maintenance mode is OFF — normal access restored.',
+      );
+    } catch (e) {
+      setError(apiError(e, 'Failed to change maintenance mode'));
+    } finally {
+      setMaintBusy(false);
+    }
+  };
 
   const load = () =>
     getSettings()
@@ -621,6 +646,75 @@ export default function Settings() {
         >
           <AppDownload />
         </Section>
+      )}
+
+      {isAdmin && s && (showMaint || s.maintenance_mode) && (
+        <Card
+          sx={{
+            mb: 3,
+            border: '1px solid',
+            borderColor: s.maintenance_mode ? 'warning.main' : 'divider',
+          }}
+        >
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+              <BuildIcon sx={{ color: s.maintenance_mode ? 'warning.main' : 'text.disabled' }} />
+              <Typography variant="h6" fontWeight={700}>
+                Maintenance Mode
+              </Typography>
+              {s.maintenance_mode && (
+                <Chip label="ACTIVE" color="warning" size="small" sx={{ fontWeight: 800 }} />
+              )}
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              When enabled, staff and clients are locked out of WorkshopIQ. Anyone who tries
+              to sign in or use the app sees: “This server is currently under maintenance.
+              Please try again later. If this continues, please contact the Everton
+              administration team.” Administrators keep full access the whole time.
+            </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={!!s.maintenance_mode}
+                  disabled={maintBusy}
+                  color="warning"
+                  onChange={(e) => toggleMaintenance(e.target.checked)}
+                />
+              }
+              label={
+                <Typography fontWeight={700}>
+                  {s.maintenance_mode ? 'Maintenance mode is ON' : 'Enable maintenance mode'}
+                </Typography>
+              }
+            />
+            {s.maintenance_mode && (
+              <Alert severity="warning" variant="outlined" sx={{ mt: 2 }}>
+                Staff and clients cannot access the server right now. Turn this off to
+                restore normal access.
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Box sx={{ textAlign: 'center', mt: 1, mb: 2 }}>
+          <Typography
+            variant="caption"
+            onClick={() => setShowMaint((v) => !v)}
+            sx={{
+              color: 'text.disabled',
+              cursor: 'pointer',
+              userSelect: 'none',
+              letterSpacing: 6,
+              px: 3,
+              py: 1,
+              display: 'inline-block',
+            }}
+          >
+            · · ·
+          </Typography>
+        </Box>
       )}
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} fullWidth maxWidth="xs">

@@ -38,6 +38,9 @@ DEFAULTS = {
     "smb_password": "",
     "smb_subpath": "",
     "smb_auto_backup": "0",
+    # Maintenance mode: when "1", only administrators can sign in / use the
+    # API. Staff and clients get a 503 with a friendly maintenance message.
+    "maintenance_mode": "0",
     "smb_last_backup_at": "",
     "smb_last_backup_status": "",
 }

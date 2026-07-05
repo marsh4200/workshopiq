@@ -20,6 +20,9 @@ import { apiError } from '../api/client';
 import { fontDisplay, fontMono } from '../theme/theme';
 import { Logomark } from '../components/common';
 
+const MAINTENANCE_MSG =
+  'This server is currently under maintenance. Please try again later. If this continues, please contact the Everton administration team.';
+
 const CAPABILITIES = [
   ['01', 'Intake', 'Log jobs the moment they arrive'],
   ['02', 'Inspection', 'Structured checks against templates'],
@@ -35,10 +38,17 @@ export default function Login() {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Set by the API interceptor when a signed-in staff/client gets bounced by
+  // maintenance mode — shows them why they suddenly landed back here.
+  const [maintenance, setMaintenance] = useState(
+    () => sessionStorage.getItem('wiq-maintenance') === '1',
+  );
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setMaintenance(false);
+    sessionStorage.removeItem('wiq-maintenance');
     setLoading(true);
     try {
       const { must_change_password } = await login(username, password, remember);
@@ -138,6 +148,12 @@ export default function Login() {
           <Typography color="text.secondary" sx={{ mb: 3, mt: 0.5 }}>
             Enter your credentials to continue.
           </Typography>
+
+          {maintenance && (
+            <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+              {MAINTENANCE_MSG}
+            </Alert>
+          )}
 
           {error && (
             <Alert severity="error" variant="outlined" sx={{ mb: 2 }}>

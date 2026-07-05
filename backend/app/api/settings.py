@@ -36,6 +36,8 @@ async def _build_settings_out(db: AsyncSession) -> SettingsOut:
         backup_before_update=str(s.get("backup_before_update", "1")).lower()
         not in ("0", "false", "no", ""),
         backup_keep=int(s.get("backup_keep", "2") or 2),
+        maintenance_mode=str(s.get("maintenance_mode", "0")).lower()
+        in ("1", "true", "yes", "on"),
     )
 
 
@@ -59,6 +61,10 @@ async def update_settings(
             value = "1" if value else "0"
         await set_setting(db, key, str(value))
     await db.commit()
+    if "maintenance_mode" in fields:
+        from app.services.maintenance import bust_cache
+
+        bust_cache(bool(fields["maintenance_mode"]))
     return await _build_settings_out(db)
 
 

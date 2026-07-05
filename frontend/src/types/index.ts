@@ -161,6 +161,7 @@ export interface AppSettings {
   available_version?: string | null;
   backup_before_update?: boolean;
   backup_keep?: number;
+  maintenance_mode?: boolean;
 }
 
 export interface SambaStatus {
