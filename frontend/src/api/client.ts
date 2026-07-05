@@ -95,6 +95,7 @@ export const login = async (username: string, password: string) => {
 export const fetchMe = async () => (await api.get<User>('/auth/me')).data;
 export const changePassword = (current_password: string, new_password: string) =>
   api.post('/auth/change-password', { current_password, new_password });
+export const acceptTerms = async () => (await api.post<User>('/auth/accept-terms')).data;
 // Self-service appearance preference (any role). Returns the updated user.
 export const updatePreferences = async (theme_preference: 'light' | 'dark' | 'system') =>
   (await api.patch<User>('/auth/preferences', { theme_preference })).data;

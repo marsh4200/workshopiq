@@ -82,6 +82,22 @@ async def update_preferences(
     return user
 
 
+@router.post("/accept-terms", response_model=UserOut)
+async def accept_terms(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record that the signed-in user accepted the first-login terms of use.
+
+    Idempotent — the first acceptance timestamp is kept if called again.
+    """
+    if user.terms_accepted_at is None:
+        user.terms_accepted_at = utcnow()
+        await db.commit()
+        await db.refresh(user)
+    return user
+
+
 @router.post("/change-password", response_model=UserOut)
 async def change_password(
     payload: ChangePasswordRequest,

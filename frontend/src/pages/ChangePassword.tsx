@@ -3,6 +3,11 @@ import {
   Alert,
   Box,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   IconButton,
   InputAdornment,
   LinearProgress,
@@ -15,7 +20,7 @@ import VisibilityIcon from '@mui/icons-material/VisibilityOutlined';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOffOutlined';
 import ShieldIcon from '@mui/icons-material/GppGoodOutlined';
 import { useNavigate } from 'react-router-dom';
-import { changePassword, apiError } from '../api/client';
+import { changePassword, acceptTerms, apiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Logomark } from '../components/common';
 
@@ -41,6 +46,24 @@ export default function ChangePassword() {
   const { user, refresh, logout } = useAuth();
   const navigate = useNavigate();
   const forced = user?.must_change_password;
+  // First-login welcome & terms gate for client users: shown once, before
+  // the forced password change. Acceptance is recorded server-side.
+  const needsTerms = Boolean(forced && user?.role === 'client' && !user?.terms_accepted_at);
+  const [termsOpen, setTermsOpen] = useState(needsTerms);
+  const [accepting, setAccepting] = useState(false);
+
+  const accept = async () => {
+    setAccepting(true);
+    try {
+      await acceptTerms();
+      await refresh();
+      setTermsOpen(false);
+    } catch {
+      // Transient failure — keep the dialog up; the button can be pressed again.
+    } finally {
+      setAccepting(false);
+    }
+  };
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -98,6 +121,62 @@ export default function ChangePassword() {
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', p: 2 }}>
+      <Dialog open={termsOpen} maxWidth="sm" fullWidth disableEscapeKeyDown>
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Logomark size={40} />
+            <Box>
+              <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
+                Welcome to WorkshopIQ
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Please read and accept before continuing
+              </Typography>
+            </Box>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            WorkshopIQ is built entirely on custom software, developed and
+            maintained in-house — it exists for one purpose: managing your jobs
+            with us.
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            Your privacy matters to us. Your personal details and job
+            information are kept private and secure, and are never shared with
+            any third party — no exceptions.
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            Our servers are protected with strong, up-to-date security measures
+            and the system is monitored around the clock.
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            On the next step you'll choose your own password. Please pick a
+            secure password that only you know.
+          </Typography>
+          <Typography variant="body2">
+            If you ever run into a problem or need help with your password,
+            please contact the administration team.
+          </Typography>
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="caption" color="text.secondary">
+            By continuing, you confirm that you have read and accept these
+            terms of use.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button
+            variant="contained"
+            fullWidth
+            size="large"
+            onClick={accept}
+            disabled={accepting}
+          >
+            {accepting ? 'One moment…' : 'I accept — continue'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Paper sx={{ p: { xs: 3, sm: 4 }, width: '100%', maxWidth: 440, borderRadius: 4 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2.5 }}>
           <Logomark size={42} />

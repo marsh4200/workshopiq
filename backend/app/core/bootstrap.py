@@ -79,6 +79,8 @@ COLUMN_STATEMENTS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(10) NOT NULL DEFAULT 'dark'",
     # Most recent successful login timestamp (null until first sign-in).
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ",
+    # First-login terms acceptance timestamp (null until accepted).
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ",
 )
 
 # One-off data fixes after the columns exist. Backfill is idempotent (the WHERE

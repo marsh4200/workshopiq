@@ -49,6 +49,11 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # When the user accepted the first-login terms of use (clients see the
+    # welcome & terms notice before setting their password). Null = not yet.
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     job_access: Mapped[list["ClientJobAccess"]] = relationship(
