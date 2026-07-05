@@ -253,8 +253,8 @@ export interface JobReportItem {
 }
 
 export interface JobReportResponse {
-  period: 'month' | 'year' | 'all';
-  year?: number | null;
+  period: 'month' | 'year';
+  year: number;
   month?: number | null;
   period_label: string;
   generated_at: string;
@@ -262,7 +262,6 @@ export interface JobReportResponse {
   total: number;
   status_breakdown: Record<string, number>;
   status_filter?: string | null;
-  customer_filter?: string | null;
   jobs: JobReportItem[];
 }
 

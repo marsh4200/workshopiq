@@ -523,8 +523,8 @@ class JobReportItem(BaseModel):
 
 
 class JobReportResponse(BaseModel):
-    period: str  # "month" | "year" | "all"
-    year: Optional[int] = None
+    period: str  # "month" | "year"
+    year: int
     month: Optional[int] = None
     period_label: str  # e.g. "June 2026" or "2026"
     generated_at: datetime
@@ -532,7 +532,6 @@ class JobReportResponse(BaseModel):
     total: int
     status_breakdown: dict[str, int]
     status_filter: Optional[str] = None
-    customer_filter: Optional[str] = None
     jobs: list[JobReportItem] = []
 
 
