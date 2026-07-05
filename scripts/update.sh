@@ -30,6 +30,7 @@ marker_present() { docker run --rm -v "${VOLUME}:/data:ro" alpine sh -c "[ -f /d
 marker_content() { docker run --rm -v "${VOLUME}:/data:ro" alpine sh -c "cat /data/${MARKER} 2>/dev/null" 2>/dev/null || true; }
 clear_marker()   { vol_sh "rm -f /data/${MARKER}"; }
 set_status()     { vol_sh "printf '%s' '$1' > /data/.update-status"; }
+set_pct()        { vol_sh "printf '%s' '$1' > /data/.update-pct"; }
 reset_log()      { vol_sh "echo '[$(date '+%H:%M:%S')] $1' > /data/.update-log"; }
 log()            { echo "$1"; vol_sh "echo '[$(date '+%H:%M:%S')] $1' >> /data/.update-log"; }
 
@@ -43,13 +44,16 @@ do_update() {
 
   set_status "running"
   reset_log "Update started"
+  set_pct 4
 
   if [ "$backup_mode" = "off" ]; then
     log "Backup skipped — 'Back up before updating' is off. Running update only."
   else
     log "Backing up database and uploads (rollback safety)..."
+    set_pct 8
     if BACKUP_KEEP="${BACKUP_KEEP:-2}" bash "${ROOT_DIR}/scripts/backup.sh" >/dev/null 2>&1; then
       log "Backup complete. Keeping the newest ${BACKUP_KEEP:-2}; older ones pruned."
+      set_pct 18
     else
       log "WARNING: backup failed, continuing."
     fi
@@ -60,6 +64,7 @@ do_update() {
   local applied_version=""
   if [ -d "${ROOT_DIR}/.git" ]; then
     log "Fetching latest from GitHub..."
+    set_pct 26
     # --force so a moved/re-pointed tag updates the local copy instead of being
     # rejected ("would clobber existing tag") and leaving us stuck rebuilding
     # the old commit the stale tag still points at.
@@ -67,6 +72,7 @@ do_update() {
     LATEST_TAG="$(git -C "$ROOT_DIR" tag -l 'v*' --sort=-v:refname | head -n1)"
     if [ -n "$LATEST_TAG" ]; then
       log "Checking out ${LATEST_TAG}..."
+      set_pct 40
       git -C "$ROOT_DIR" checkout -f "$LATEST_TAG" >/dev/null 2>&1
       applied_version="${LATEST_TAG#v}"
       # Single source of truth = the deployed git tag. Record it into .env so
@@ -92,9 +98,55 @@ do_update() {
   fi
 
   log "Rebuilding containers (this can take a few minutes)..."
-  if $COMPOSE up -d --build >/dev/null 2>&1; then
-    log "Containers rebuilt and restarted."
-  else
+  set_pct 45
+
+  # --- True build progress ---------------------------------------------------
+  # Build images FIRST (old containers keep serving), streaming BuildKit's
+  # plain-text output and turning its "[service step/total]" markers into real
+  # percentages (45 -> 90) plus per-step log lines. Only after the images are
+  # ready do we recreate the containers, so actual downtime is a few seconds.
+  local fail_flag="/tmp/wiq-build-failed.$$"
+  rm -f "$fail_flag"
+  { $COMPOSE build --progress=plain 2>&1 || touch "$fail_flag"; } | (
+    declare -A SVC_STEP SVC_TOTAL
+    last_pct=45
+    while IFS= read -r line; do
+      if [[ "$line" =~ \[([a-zA-Z0-9_.-]+)([^]]*[[:space:]])?([0-9]+)/([0-9]+)\] ]]; then
+        svc="${BASH_REMATCH[1]}"; step="${BASH_REMATCH[3]}"; total="${BASH_REMATCH[4]}"
+        [ "$total" -lt 1 ] && continue
+        prev="${SVC_STEP[$svc]:-0}"
+        if [ "$step" -gt "$prev" ]; then
+          SVC_STEP[$svc]="$step"; SVC_TOTAL[$svc]="$total"
+          log "Building ${svc} — step ${step}/${total}"
+          # Overall fraction across the two buildable services (backend+frontend).
+          sum=0
+          for k in "${!SVC_STEP[@]}"; do
+            sum=$(( sum + SVC_STEP[$k] * 100 / SVC_TOTAL[$k] ))
+          done
+          pct=$(( 45 + sum * 45 / 200 ))
+          [ "$pct" -gt 90 ] && pct=90
+          if [ "$pct" -gt "$last_pct" ]; then
+            last_pct=$pct
+            set_pct "$pct"
+          fi
+        fi
+      fi
+    done
+  )
+
+  if [ ! -f "$fail_flag" ]; then
+    set_pct 90
+    log "Images built. Restarting services (brief downtime)..."
+    if $COMPOSE up -d >/dev/null 2>&1; then
+      set_pct 96
+      log "Containers rebuilt and restarted."
+    else
+      touch "$fail_flag"
+    fi
+  fi
+
+  if [ -f "$fail_flag" ]; then
+    rm -f "$fail_flag"
     log "ERROR: rebuild failed."
     if [ "$backup_mode" != "off" ]; then
       LAST_BACKUP="$(ls -1t "${ROOT_DIR}/backups"/workshopiq-backup-*.tar.gz 2>/dev/null | head -n1 || true)"
@@ -113,6 +165,7 @@ do_update() {
   fi
 
   log "Update complete."
+  set_pct 100
   set_status "done"
   clear_marker
 }

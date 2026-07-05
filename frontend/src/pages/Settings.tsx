@@ -207,6 +207,7 @@ export default function Settings() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [updateState, setUpdateState] = useState<'queued' | 'running' | 'done' | 'error' | 'idle'>('idle');
   const [updateLog, setUpdateLog] = useState('');
+  const [updatePct, setUpdatePct] = useState<number | null>(null);
   const pollRef = useRef<number | null>(null);
 
   const stopPolling = () => {
@@ -233,6 +234,7 @@ export default function Settings() {
     setMsg('');
     setUpdateNote(null);
     setUpdateLog('');
+    setUpdatePct(null);
     setUpdateState('queued');
     setUpdateOpen(true);
     try {
@@ -251,6 +253,7 @@ export default function Settings() {
       try {
         const st = await getUpdateStatus();
         setUpdateLog(st.log || '');
+        if (typeof st.pct === 'number') setUpdatePct((p) => Math.max(p ?? 0, st.pct as number));
         setUpdateState((st.status as typeof updateState) || 'running');
         if (st.status === 'done' || st.status === 'error') {
           stopPolling();
@@ -799,6 +802,7 @@ export default function Settings() {
         open={updateOpen}
         state={updateState}
         log={updateLog}
+        serverPct={updatePct}
         onClose={() => setUpdateOpen(false)}
         onReload={() => window.location.reload()}
       />

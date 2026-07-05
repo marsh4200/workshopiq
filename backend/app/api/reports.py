@@ -41,26 +41,34 @@ def _period_bounds(period: str, year: int, month: int | None):
         start = datetime(year, 1, 1, tzinfo=tz)
         end = datetime(year + 1, 1, 1, tzinfo=tz)
         label = str(year)
+    elif period == "all":
+        start = datetime(2000, 1, 1, tzinfo=tz)
+        end = datetime(2100, 1, 1, tzinfo=tz)
+        label = "All time"
     else:
-        raise HTTPException(status_code=400, detail="period must be 'month' or 'year'")
+        raise HTTPException(status_code=400, detail="period must be 'month', 'year' or 'all'")
     return start, end, label
 
 
 @router.get("/jobs", response_model=JobReportResponse)
 async def jobs_report(
-    period: str = Query("month", pattern="^(month|year)$"),
-    year: int = Query(..., ge=2000, le=2100),
+    period: str = Query("month", pattern="^(month|year|all)$"),
+    year: int | None = Query(None, ge=2000, le=2100),
     month: int | None = Query(None, ge=1, le=12),
     status: str | None = Query(None),
+    customer: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_staff),
 ):
-    """Basic job report for a calendar month or year.
+    """Basic job report for a calendar month, year, or all time.
 
     Returns job number, client name and PO number (plus component/status/date)
-    for every job received in the selected period. Intended for printouts.
+    for every job received in the selected period. An optional ``customer``
+    filter narrows it to a single customer's jobs (customer report printouts).
     """
-    start, end, label = _period_bounds(period, year, month)
+    if period != "all" and year is None:
+        raise HTTPException(status_code=400, detail="A year is required for this period")
+    start, end, label = _period_bounds(period, year or 2000, month)
 
     query = (
         select(Job)
@@ -71,6 +79,8 @@ async def jobs_report(
         if status not in JOB_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status")
         query = query.where(Job.status == status)
+    if customer:
+        query = query.where(Job.customer_name == customer)
 
     rows = (await db.execute(query)).scalars().all()
 
@@ -82,7 +92,7 @@ async def jobs_report(
 
     return JobReportResponse(
         period=period,
-        year=year,
+        year=year if period != "all" else None,
         month=month if period == "month" else None,
         period_label=label,
         generated_at=datetime.now(timezone.utc),
@@ -90,5 +100,6 @@ async def jobs_report(
         total=len(rows),
         status_breakdown=breakdown,
         status_filter=status,
+        customer_filter=customer,
         jobs=[JobReportItem.model_validate(j) for j in rows],
     )

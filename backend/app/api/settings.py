@@ -158,8 +158,10 @@ async def update_status(_: User = Depends(require_admin)):
     """Return the current update status and progress log for the UI to poll."""
     status_file = UPLOAD_DIR / ".update-status"
     log_file = UPLOAD_DIR / ".update-log"
+    pct_file = UPLOAD_DIR / ".update-pct"
     status = "idle"
     log = ""
+    pct: int | None = None
     try:
         if status_file.exists():
             status = status_file.read_text().strip() or "idle"
@@ -170,7 +172,12 @@ async def update_status(_: User = Depends(require_admin)):
             log = log_file.read_text()
     except OSError:
         pass
-    return {"status": status, "log": log}
+    try:
+        if pct_file.exists():
+            pct = max(0, min(100, int(pct_file.read_text().strip())))
+    except (OSError, ValueError):
+        pass
+    return {"status": status, "log": log, "pct": pct}
 
 
 @router.post("/apply-update")
@@ -190,6 +197,7 @@ async def apply_update(
         do_backup = str(pref).lower() not in ("0", "false", "no", "")
         marker = "update" if do_backup else "update-nobackup"
         (UPLOAD_DIR / ".update-status").write_text("queued")
+        (UPLOAD_DIR / ".update-pct").write_text("2")
         seed = (
             "[queued] Update requested. Waiting for the update service…\n"
             if do_backup

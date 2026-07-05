@@ -22,6 +22,9 @@ interface Props {
   open: boolean;
   state: UpdateState;
   log: string;
+  /** True progress reported by the updater (.update-pct). Null/undefined on
+   *  older updaters — the dialog then falls back to log-milestone parsing. */
+  serverPct?: number | null;
   onClose: () => void;
   onReload: () => void;
 }
@@ -70,7 +73,7 @@ function derive(state: UpdateState, log: string) {
   return { pct, step, rebuilding };
 }
 
-export default function UpdateProgressDialog({ open, state, log, onClose, onReload }: Props) {
+export default function UpdateProgressDialog({ open, state, log, serverPct, onClose, onReload }: Props) {
   const { pct: milestonePct, step, rebuilding } = useMemo(() => derive(state, log), [state, log]);
 
   const [display, setDisplay] = useState(0);
@@ -91,13 +94,16 @@ export default function UpdateProgressDialog({ open, state, log, onClose, onRelo
   }, [open, state]);
 
   // During the long rebuild phase, creep forward so it's visibly working.
+  // When the updater reports true progress (serverPct), the creep is only a
+  // smoothing layer capped just above it — the bar tracks reality.
   useEffect(() => {
     if (!rebuilding) return;
+    const cap = serverPct != null ? Math.min(serverPct + 3, 96) : 82;
     const id = window.setInterval(() => {
-      setCreep((c) => Math.min(82, Math.max(c, 56) + 1));
+      setCreep((c) => Math.min(cap, Math.max(c, serverPct != null ? serverPct : 56) + 1));
     }, 1100);
     return () => window.clearInterval(id);
-  }, [rebuilding]);
+  }, [rebuilding, serverPct]);
 
   // Rotate the rebuild caption so each container reads as making progress.
   useEffect(() => {
@@ -106,7 +112,12 @@ export default function UpdateProgressDialog({ open, state, log, onClose, onRelo
     return () => window.clearInterval(id);
   }, [rebuilding]);
 
-  const target = Math.max(milestonePct, rebuilding ? creep : 0, state === 'done' ? 100 : 0);
+  const target = Math.max(
+    milestonePct,
+    serverPct ?? 0,
+    rebuilding ? creep : 0,
+    state === 'done' ? 100 : 0,
+  );
 
   // Ease the displayed bar toward the target (forward only).
   useEffect(() => {

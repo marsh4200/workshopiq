@@ -23,11 +23,13 @@ import {
 import PrintIcon from '@mui/icons-material/Print';
 import SummarizeIcon from '@mui/icons-material/SummarizeOutlined';
 import TimelineIcon from '@mui/icons-material/TimelineOutlined';
-import { getJobReport, getJob, listJobs, fetchMeta, apiError } from '../api/client';
+import { getJobReport, getJob, listJobs, listCustomers, fetchMeta, apiError } from '../api/client';
 import { StatusBadge, STATUS_COLORS, fmtDay, fmtDate, EmptyState } from '../components/common';
 import { useSettings } from '../context/SettingsContext';
 import { useDeviceType } from '../hooks/useDeviceType';
-import type { JobReportResponse, JobListItem, JobDetail } from '../types';
+import PersonSearchIcon from '@mui/icons-material/PersonSearchOutlined';
+import { Autocomplete } from '@mui/material';
+import type { JobReportResponse, JobListItem, JobDetail, Customer } from '../types';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -63,10 +65,368 @@ export default function Reports() {
         sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
       >
         <Tab label="Period Reports" />
+        <Tab label="Customer Report" />
         <Tab label="Individual Job Report" />
       </Tabs>
 
-      {tab === 0 ? <PeriodReports /> : <IndividualReport />}
+      {tab === 0 ? <PeriodReports /> : tab === 1 ? <CustomerReport /> : <IndividualReport />}
+    </Box>
+  );
+}
+
+/* ===================================================================== */
+/* Customer report — every job for one customer, all time or per year.   */
+/* ===================================================================== */
+function CustomerReport() {
+  const { settings } = useSettings();
+  const isMobile = useDeviceType().isMobile;
+
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customer, setCustomer] = useState('');
+  const [scope, setScope] = useState<'all' | 'year'>('all');
+  const [year, setYear] = useState(now.getFullYear());
+  const [status, setStatus] = useState('');
+  const [statuses, setStatuses] = useState<string[]>([]);
+
+  const [report, setReport] = useState<JobReportResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    listCustomers()
+      .then(setCustomers)
+      .catch(() => undefined);
+    fetchMeta()
+      .then((m) => setStatuses(m.statuses))
+      .catch(() => undefined);
+  }, []);
+
+  const generate = async () => {
+    if (!customer.trim()) {
+      setError('Pick a customer first.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const data = await getJobReport({
+        period: scope === 'all' ? 'all' : 'year',
+        year: scope === 'year' ? year : undefined,
+        status: status || undefined,
+        customer: customer.trim(),
+      });
+      setReport(data);
+    } catch (e) {
+      setError(apiError(e, 'Failed to generate report'));
+      setReport(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logoUrl = settings?.company_logo
+    ? `/api/settings/logo/${settings.company_logo}`
+    : '';
+
+  const handlePrint = () => {
+    if (!report) return;
+    const company = report.company_name || 'WorkshopIQ';
+    const title = 'Customer Job Report';
+    const generated = new Date(report.generated_at).toLocaleString();
+    const customerName = report.customer_filter || customer;
+
+    const rows = report.jobs
+      .map(
+        (j, i) => `
+        <tr>
+          <td class="num">${i + 1}</td>
+          <td class="mono">${escapeHtml(j.job_number)}</td>
+          <td>${escapeHtml(j.po_number || '—')}</td>
+          <td>${escapeHtml(j.component_type || '—')}</td>
+          <td>${escapeHtml(j.status)}</td>
+          <td>${new Date(j.date_received).toLocaleDateString()}</td>
+        </tr>`,
+      )
+      .join('');
+
+    const breakdown = Object.entries(report.status_breakdown)
+      .filter(([, c]) => c > 0)
+      .map(([st, c]) => `<span class="pill">${escapeHtml(st)}: <b>${c}</b></span>`)
+      .join('');
+
+    const filterLine = report.status_filter
+      ? `<div class="meta">Filtered by status: <b>${escapeHtml(report.status_filter)}</b></div>`
+      : '';
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(company)} — ${title} — ${escapeHtml(customerName)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    color: #111; margin: 32px; font-size: 12px;
+  }
+  header { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #111; padding-bottom: 14px; }
+  header img { height: 52px; width: auto; object-fit: contain; }
+  .brand h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+  .brand .sub { color: #555; font-size: 12px; margin-top: 2px; }
+  .report-title { text-align: right; margin-left: auto; }
+  .report-title .t { font-size: 15px; font-weight: 700; }
+  .report-title .p { font-size: 18px; font-weight: 800; }
+  .meta { color: #555; margin-top: 4px; font-size: 11px; }
+  .summary { margin: 16px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .total { font-size: 14px; font-weight: 700; margin-right: 8px; }
+  .pill { border: 1px solid #ccc; border-radius: 999px; padding: 2px 10px; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { background: #f3f4f6; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+  td.num { color: #888; width: 28px; }
+  td.mono { font-family: 'SF Mono', Consolas, monospace; font-weight: 600; }
+  tr:nth-child(even) td { background: #fafafa; }
+  footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid #ddd; color: #777; font-size: 10px; display: flex; justify-content: space-between; }
+  .empty { padding: 40px; text-align: center; color: #777; }
+  @media print {
+    body { margin: 14mm; }
+    @page { size: A4; margin: 12mm; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    ${logoUrl ? `<img src="${logoUrl}" alt="logo" onerror="this.style.display='none'" />` : ''}
+    <div class="brand">
+      <h1>${escapeHtml(company)}</h1>
+      <div class="sub">Customer Job Report</div>
+    </div>
+    <div class="report-title">
+      <div class="t">${escapeHtml(customerName)}</div>
+      <div class="p">${escapeHtml(report.period_label)}</div>
+      ${filterLine}
+    </div>
+  </header>
+
+  <div class="summary">
+    <span class="total">${report.total} job${report.total === 1 ? '' : 's'}</span>
+    ${breakdown}
+  </div>
+
+  ${
+    report.jobs.length
+      ? `<table>
+    <thead>
+      <tr>
+        <th>#</th><th>Job #</th><th>PO Number</th>
+        <th>Component</th><th>Status</th><th>Received</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`
+      : `<div class="empty">No jobs recorded for this customer.</div>`
+  }
+
+  <footer>
+    <span>Generated ${escapeHtml(generated)}</span>
+    <span>${escapeHtml(company)} · WorkshopIQ</span>
+  </footer>
+  <script>
+    window.onload = function () { window.focus(); window.print(); };
+  </script>
+</body>
+</html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) {
+      setError('Could not open print window — please allow pop-ups for this site.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
+  const activeBreakdown = useMemo(
+    () =>
+      report
+        ? Object.entries(report.status_breakdown).filter(([, c]) => c > 0)
+        : [],
+    [report],
+  );
+
+  return (
+    <Box>
+      <Card sx={{ p: { xs: 2, md: 2.5 }, mb: 3 }}>
+        <Stack spacing={2}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+            <Autocomplete
+              freeSolo
+              options={customers.map((c) => c.name)}
+              inputValue={customer}
+              onInputChange={(_, v) => setCustomer(v)}
+              sx={{ minWidth: 260, flex: 1 }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Customer"
+                  helperText="Pick a customer, or type the exact name as it appears on their jobs"
+                />
+              )}
+            />
+            <TextField
+              select
+              label="Scope"
+              value={scope}
+              onChange={(e) => setScope(e.target.value as 'all' | 'year')}
+              sx={{ minWidth: 160 }}
+            >
+              <MenuItem value="all">All time</MenuItem>
+              <MenuItem value="year">Single year</MenuItem>
+            </TextField>
+            {scope === 'year' && (
+              <TextField
+                select
+                label="Year"
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value))}
+                sx={{ minWidth: 140 }}
+              >
+                {YEARS.map((y) => (
+                  <MenuItem key={y} value={y}>
+                    {y}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            <TextField
+              select
+              label="Status (optional)"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              sx={{ minWidth: 200 }}
+            >
+              <MenuItem value="">All statuses</MenuItem>
+              {statuses.map((st) => (
+                <MenuItem key={st} value={st}>
+                  {st}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Box sx={{ flex: 1 }} />
+            <Button
+              variant="contained"
+              onClick={generate}
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <PersonSearchIcon />}
+              sx={{ alignSelf: { xs: 'stretch', md: 'center' } }}
+            >
+              Generate
+            </Button>
+          </Stack>
+        </Stack>
+      </Card>
+
+      {error && (
+        <Typography color="error" sx={{ mb: 2 }}>
+          {error}
+        </Typography>
+      )}
+
+      {report && (
+        <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            spacing={2}
+            sx={{ mb: 2 }}
+          >
+            <Box>
+              <Typography variant="h6" fontWeight={800}>
+                {report.customer_filter || customer} · {report.period_label}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {report.total} job{report.total === 1 ? '' : 's'}
+                {report.status_filter ? ` · ${report.status_filter}` : ''}
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={handlePrint}
+              disabled={!report.total}
+            >
+              Print / Save PDF
+            </Button>
+          </Stack>
+
+          {activeBreakdown.length > 0 && (
+            <>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+                {activeBreakdown.map(([st, c]) => (
+                  <Chip key={st} label={`${st}: ${c}`} size="small" variant="outlined" />
+                ))}
+              </Stack>
+              <Divider sx={{ mb: 2 }} />
+            </>
+          )}
+
+          {report.jobs.length === 0 ? (
+            <EmptyState
+              icon={<PersonSearchIcon sx={{ fontSize: 48, opacity: 0.4 }} />}
+              title="No jobs for this customer"
+              subtitle="Check the customer name matches how it was captured on the jobs."
+            />
+          ) : isMobile ? (
+            <Stack spacing={1.5}>
+              {report.jobs.map((j) => (
+                <Card key={j.id} variant="outlined" sx={{ p: 2 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography fontWeight={800}>{j.job_number}</Typography>
+                    <StatusBadge status={j.status} />
+                  </Stack>
+                  <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      PO: {j.po_number || '—'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {fmtDay(j.date_received)}
+                    </Typography>
+                  </Stack>
+                </Card>
+              ))}
+            </Stack>
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Job #</TableCell>
+                  <TableCell>PO Number</TableCell>
+                  <TableCell>Component</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Received</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {report.jobs.map((j) => (
+                  <TableRow key={j.id} hover>
+                    <TableCell sx={{ fontWeight: 700 }}>{j.job_number}</TableCell>
+                    <TableCell>{j.po_number || '—'}</TableCell>
+                    <TableCell>{j.component_type || '—'}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={j.status} />
+                    </TableCell>
+                    <TableCell>{fmtDay(j.date_received)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      )}
     </Box>
   );
 }
