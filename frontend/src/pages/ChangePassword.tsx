@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
@@ -49,7 +49,12 @@ export default function ChangePassword() {
   // First-login welcome & terms gate for client users: shown once, before
   // the forced password change. Acceptance is recorded server-side.
   const needsTerms = Boolean(forced && user?.role === 'client' && !user?.terms_accepted_at);
-  const [termsOpen, setTermsOpen] = useState(needsTerms);
+  const [termsOpen, setTermsOpen] = useState(false);
+  // Open reactively: the user profile loads asynchronously after sign-in, so
+  // a mount-time check can run before `user` exists and miss the dialog.
+  useEffect(() => {
+    if (needsTerms) setTermsOpen(true);
+  }, [needsTerms]);
   const [accepting, setAccepting] = useState(false);
 
   const accept = async () => {
