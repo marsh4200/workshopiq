@@ -45,6 +45,7 @@ OPERATORS = [
     "Matthew",
     "Lucky",
     "Raymond",
+    "Ruben",
     "Steven",
     "Sammy",
     "Louis",

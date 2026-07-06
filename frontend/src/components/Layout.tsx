@@ -340,6 +340,13 @@ export default function Layout() {
         component="main"
         sx={{
           flexGrow: 1,
+          // A flex child's min-width defaults to its content width — one wide
+          // table and the whole page gains a sideways scroll on phones.
+          // minWidth: 0 lets this column shrink to the viewport and keeps
+          // overflow contained inside the cards instead.
+          minWidth: 0,
+          maxWidth: '100%',
+          overflowX: 'hidden',
           width: { md: `calc(100% - ${DRAWER}px)` },
           px: { xs: 2, md: 3.5 },
           pt: { xs: 2, md: 3.5 },

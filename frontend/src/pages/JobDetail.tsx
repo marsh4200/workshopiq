@@ -87,6 +87,7 @@ import ReviewDialog from '../components/ReviewDialog';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { useDeviceType } from '../hooks/useDeviceType';
+import { isAndroid, printQrSheet } from '../utils/platform';
 import type { CheckinStatus, Inspection, JobDetail as JobDetailT, JobCostItem, Review, User } from '../types';
 
 const zarFmt = new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' });
@@ -1156,6 +1157,20 @@ function DocumentsTab({
   };
 
   const download = async (filename: string, originalName?: string | null) => {
+    // Android (Chrome AND the APK WebView) cannot reliably save a blob: URL —
+    // the download manager / WebView DownloadListener only understands real
+    // http(s) URLs, so blob downloads silently do nothing. Hand Android the
+    // real authenticated URL (?token=) and let the OS fetch + open it. Other
+    // platforms keep the proven blob path.
+    if (isAndroid()) {
+      const a = document.createElement('a');
+      a.href = fileUrl(job.id, filename);
+      a.download = originalName || filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
     try {
       const url = await fetchFileBlob(job.id, filename);
       const a = document.createElement('a');
@@ -1407,32 +1422,18 @@ function CheckInTab({ job, onUpdate }: { job: JobDetailT; onUpdate: () => Promis
 
   const print = () => {
     if (!status) return;
-    const w = window.open('', '_blank');
-    if (!w) return;
-    const stamped = status.checked_in;
-    const qrBlock = stamped
-      ? `<div style="position:relative;display:inline-block">` +
-        `<img src="${status.qr_png}" style="width:300px;height:300px;filter:grayscale(1) opacity(0.3)"/>` +
-        `<div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center">` +
-        `<div style="transform:rotate(-9deg);background:#2e7d32;color:#fff;font-weight:800;` +
-        `letter-spacing:2px;font-size:26px;padding:12px 40px;border:3px solid #fff;` +
-        `box-shadow:0 6px 18px rgba(0,0,0,0.3);white-space:nowrap">CHECKED IN</div>` +
-        `</div></div>`
-      : `<img src="${status.qr_png}" style="width:300px;height:300px"/>`;
-    w.document.write(
-      `<html><head><title>Check-in ${job.job_number}</title></head>` +
-        `<body style="text-align:center;font-family:sans-serif;padding:40px;color:#111">` +
-        `<h2 style="margin:0 0 4px">${job.job_number}</h2>` +
-        `<div style="color:#555;margin-bottom:20px">${job.customer_name}</div>` +
-        qrBlock +
-        `<p style="font-size:13px;color:#555;margin-top:16px">` +
-        (stamped ? 'Already checked in · WorkshopIQ' : 'Scan to check in · WorkshopIQ') +
-        `</p>` +
-        `</body></html>`,
-    );
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 250);
+    // printQrSheet only fires the print dialog once the QR image has fully
+    // loaded inside the print document — the old fixed 250ms delay raced the
+    // image and produced sheets with a blank square instead of the code.
+    printQrSheet({
+      title: job.job_number,
+      subtitle: job.customer_name,
+      qrPng: status.qr_png,
+      caption: status.checked_in
+        ? 'Already checked in · WorkshopIQ'
+        : 'Scan to check in · WorkshopIQ',
+      stamp: status.checked_in ? 'CHECKED IN' : undefined,
+    });
   };
 
   // Check-in only opens once a (normal) inspection has been completed. Jobs

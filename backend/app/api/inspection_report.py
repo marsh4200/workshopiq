@@ -38,7 +38,7 @@ from app.api.checkin import (
     public_base_url,
     qr_data_uri,
 )
-from app.api.deps import require_admin, require_staff
+from app.api.deps import get_user_for_file, require_admin, require_staff
 from app.core.config import settings
 from app.core.database import get_db
 from app.models import Document, InspectionReport, Job, TimelineEvent, User
@@ -160,7 +160,13 @@ async def generate_report(
 
 
 @router.get("/inspection-reports/blank.pdf")
-async def blank_report_pdf(_: User = Depends(require_staff)):
+async def blank_report_pdf(user: User = Depends(get_user_for_file)):
+    # Auth via Authorization header OR ?token= query param (same pattern as
+    # the job file endpoint). The query-param path is what lets Android open
+    # the PDF with a plain navigation and hand it to the OS viewer — a plain
+    # <a href> / new-tab navigation cannot attach an Authorization header.
+    if user.role not in ("administrator", "staff"):
+        raise HTTPException(status_code=403, detail="Staff only")
     pdf = await run_in_threadpool(inspection_report_service.render_blank_pdf, "")
     return Response(
         content=pdf,
