@@ -1,26 +1,40 @@
-# WorkshopIQ — Inspection Reports: doc-delete sync + customer folders
+# WorkshopIQ — Ruben, Print QR, Android documents, mobile scroll lock
 
-## Edited files (2)
-- `backend/app/api/jobs.py` — deleting a filed inspection-report PDF from a
-  job's Documents now also deletes the linked report record, so the
-  Inspection Reports page no longer shows a "Filed" row pointing at a PDF
-  that's gone. A timeline event is logged
-  ("Inspection report ECE-xxxx deleted with its document").
-- `frontend/src/pages/InspectionReports.tsx` — reports are now grouped into
-  one collapsible folder per customer, exactly like the Jobs page (folder
-  icons, count chips, single folder auto-opens, Expand all / Collapse all).
-  Folders with pending reports show an amber "N pending" chip. The redundant
-  customer name was dropped from the rows since the folder is the customer.
+## Edited files (7) + new file (1)
+
+### New
+- `frontend/src/utils/platform.ts` — shared helpers: `isAndroid()` and
+  `printQrSheet()`, a QR print routine that only fires the print dialog once
+  the QR image has fully loaded inside the print document. Falls back to a
+  hidden iframe if the popup is blocked.
+
+### Backend
+- `backend/app/api/checkin.py` — **Ruben** added to the check-in operator
+  dropdown (OPERATORS list).
+- `backend/app/api/inspection_report.py` — `/inspection-reports/blank.pdf`
+  now also accepts `?token=` auth (same pattern as job documents), so
+  Android can open it via a plain navigation.
+
+### Frontend
+- `frontend/src/pages/JobDetail.tsx`
+  - Check-In QR **Print** now uses `printQrSheet` — the old fixed 250ms
+    delay raced the image and printed a blank square instead of the code.
+  - Documents tab: on **Android** (browser and the APK), View/Download hand
+    the real authenticated URL (`?token=`) to the OS instead of a `blob:`
+    URL — Android's download manager / WebView can't fetch blobs, which is
+    why documents did nothing on Android while iPhone worked.
+- `frontend/src/pages/InspectionReports.tsx` — new **Print QR** button in
+  the QR dialog (prints the code itself with certificate number + job), next
+  to the existing Print blank.
+- `frontend/src/api/client.ts` — "Print blank" on Android opens the real
+  `?token=` URL instead of a blob so the device's PDF viewer gets it.
+- `frontend/src/index.css` + `frontend/src/components/Layout.tsx` — page is
+  locked to vertical scrolling on phones. `overflow-x: hidden` on
+  html/body/#root, `minWidth: 0` on the main flex column (a wide table no
+  longer pushes the whole layout sideways), and on ≤900px cards scroll
+  their own content horizontally so wide tables stay fully reachable
+  inside the card while the page only moves up/down.
 
 ## Hot file-drop safe
-No new dependencies, no DB migration (uses the existing
-`inspection_reports.document_id` link). Drop the two files in and rebuild
-the frontend as usual.
-
-## How it works
-- Document delete (admin, job page) → looks up any inspection report whose
-  `document_id` matches the doc, deletes the report row(s), logs to the job
-  timeline, then removes the file + document as before. The certificate
-  number is simply retired; generate a fresh QR to redo the report.
-- Pending (unsubmitted) reports are untouched — they still get removed from
-  the Inspection Reports page itself, same as before.
+No new dependencies, no DB migration. Drop the files in and rebuild the
+frontend as usual. Frontend builds clean (`tsc -b && vite build` verified).

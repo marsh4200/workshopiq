@@ -449,6 +449,20 @@ export const deleteTrainingRecord = (id: number) =>
 
 // Blank printable sheet (PDF) — opened in a new tab for printing.
 export const openBlankInspectionReport = async () => {
+  // Android (Chrome and the APK WebView) can't open a blob: URL in a new
+  // tab — the tab comes up blank / "no app for this link". Hand Android the
+  // real authenticated URL (?token=, same pattern as job documents) so the
+  // OS downloads and opens it in the device's PDF viewer.
+  if (/android/i.test(navigator.userAgent)) {
+    const token = getToken();
+    const a = document.createElement('a');
+    a.href = `/api/inspection-reports/blank.pdf?token=${encodeURIComponent(token || '')}`;
+    a.download = 'Inspection Report (blank).pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
   const res = await api.get('/inspection-reports/blank.pdf', { responseType: 'blob' });
   const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
   window.open(url, '_blank');

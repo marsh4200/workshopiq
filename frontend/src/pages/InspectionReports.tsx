@@ -49,6 +49,7 @@ import {
 import { PageHeader, EmptyState, fmtDate } from '../components/common';
 import { useAuth } from '../context/AuthContext';
 import { useDeviceType } from '../hooks/useDeviceType';
+import { printQrSheet } from '../utils/platform';
 import type { InspectionReportDetail, InspectionReportItem, JobListItem } from '../types';
 
 interface CustomerGroup {
@@ -467,6 +468,24 @@ export default function InspectionReports() {
             </Button>
             <Button size="small" startIcon={<ContentCopyIcon />} onClick={() => qr && copyLink(qr.url)}>
               Copy link
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<PrintIcon />}
+              disabled={!qr?.qr_png}
+              onClick={() =>
+                qr &&
+                qr.qr_png &&
+                printQrSheet({
+                  title: qr.certificate_number,
+                  subtitle: `${qr.job_number} · ${qr.customer_name}`,
+                  qrPng: qr.qr_png,
+                  caption: 'Scan to fill the inspection report · WorkshopIQ',
+                })
+              }
+            >
+              Print QR
             </Button>
             <Button
               size="small"
