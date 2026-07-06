@@ -231,7 +231,7 @@ export const updateSettings = async (body: Record<string, unknown>) =>
 export const checkUpdates = async () => (await api.post<AppSettings>('/settings/check-updates')).data;
 export const applyUpdate = async () => (await api.post('/settings/apply-update')).data;
 export const getUpdateStatus = async () =>
-  (await api.get<{ status: string; log: string }>('/settings/update-status')).data;
+  (await api.get<{ status: string; log: string; pct?: number | null }>('/settings/update-status')).data;
 export const uploadLogo = async (file: File) => {
   const fd = new FormData();
   fd.append('file', file);
@@ -345,10 +345,11 @@ export const getDashboard = async () => (await api.get<DashboardStats>('/dashboa
 
 // Reports
 export const getJobReport = async (params: {
-  period: 'month' | 'year';
-  year: number;
+  period: 'month' | 'year' | 'all';
+  year?: number;
   month?: number;
   status?: string;
+  customer?: string;
 }) => (await api.get<JobReportResponse>('/reports/jobs', { params })).data;
 
 // Customer reviews

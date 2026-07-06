@@ -106,8 +106,9 @@ do_update() {
   # percentages (45 -> 90) plus per-step log lines. Only after the images are
   # ready do we recreate the containers, so actual downtime is a few seconds.
   local fail_flag="/tmp/wiq-build-failed.$$"
-  rm -f "$fail_flag"
-  { $COMPOSE build --progress=plain 2>&1 || touch "$fail_flag"; } | (
+  local build_out="/tmp/wiq-build-output.$$"
+  rm -f "$fail_flag" "$build_out"
+  { $COMPOSE build --progress=plain 2>&1 || touch "$fail_flag"; } | tee "$build_out" | (
     declare -A SVC_STEP SVC_TOTAL
     last_pct=45
     while IFS= read -r line; do
@@ -148,6 +149,18 @@ do_update() {
   if [ -f "$fail_flag" ]; then
     rm -f "$fail_flag"
     log "ERROR: rebuild failed."
+    # Surface the real cause in the progress log: any explicit error lines from
+    # the build, plus the last few lines of raw output. Sanitised (quotes and
+    # CRs stripped, length-capped) so the log write itself can't break.
+    if [ -s "$build_out" ]; then
+      log "---- build error details ----"
+      { grep -iE "error|failed|cannot|fatal" "$build_out" | tail -n 8; tail -n 8 "$build_out"; } | \
+        awk '!seen[$0]++' | while IFS= read -r bl; do
+          bl="${bl//\'/}"; bl="${bl//$'\r'/}"; bl="${bl:0:200}"
+          [ -n "$bl" ] && log "  $bl"
+        done
+      log "---- end of build details ----"
+    fi
     if [ "$backup_mode" != "off" ]; then
       LAST_BACKUP="$(ls -1t "${ROOT_DIR}/backups"/workshopiq-backup-*.tar.gz 2>/dev/null | head -n1 || true)"
       if [ -n "$LAST_BACKUP" ]; then
@@ -159,6 +172,8 @@ do_update() {
     clear_marker
     return 1
   fi
+
+  rm -f "$build_out"
 
   if [ -n "$applied_version" ]; then
     log "Updated to version ${applied_version}."
