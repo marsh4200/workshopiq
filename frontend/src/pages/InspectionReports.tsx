@@ -69,14 +69,23 @@ function byRecency(a: InspectionReportItem, b: InspectionReportItem): number {
   });
 }
 
-function StatusChip({ submitted }: { submitted: boolean }) {
-  const color = submitted ? '#22c55e' : '#f59e0b';
+function StatusChip({ r }: { r: InspectionReportItem }) {
+  const color = r.submitted ? '#22c55e' : '#f59e0b';
   return (
-    <Chip
-      label={submitted ? 'Filed' : 'Pending'}
-      size="small"
-      sx={{ bgcolor: `${color}1f`, color, fontWeight: 600, borderRadius: 1 }}
-    />
+    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+      <Chip
+        label={r.submitted ? 'Filed' : 'Pending'}
+        size="small"
+        sx={{ bgcolor: `${color}1f`, color, fontWeight: 600, borderRadius: 1 }}
+      />
+      {r.client_signed && (
+        <Chip
+          label="Client signed"
+          size="small"
+          sx={{ bgcolor: '#3b82f61f', color: '#3b82f6', fontWeight: 600, borderRadius: 1 }}
+        />
+      )}
+    </Stack>
   );
 }
 
@@ -191,7 +200,7 @@ export default function InspectionReports() {
           <Card key={r.id} variant="outlined" sx={{ p: 1.75, bgcolor: 'background.default' }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Typography sx={{ fontWeight: 700 }}>{r.certificate_number}</Typography>
-              <StatusChip submitted={r.submitted} />
+              <StatusChip r={r} />
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {r.job_number}
@@ -255,7 +264,7 @@ export default function InspectionReports() {
               <TableCell sx={{ fontWeight: 600 }}>{r.certificate_number}</TableCell>
               <TableCell>{r.job_number}</TableCell>
               <TableCell>
-                <StatusChip submitted={r.submitted} />
+                <StatusChip r={r} />
               </TableCell>
               <TableCell>{r.inspector_name || '—'}</TableCell>
               <TableCell>{fmtDate(r.submitted_at || r.created_at)}</TableCell>

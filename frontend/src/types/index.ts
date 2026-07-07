@@ -389,6 +389,9 @@ export interface InspectionReportItem {
   qc_reject?: string | null;
   rework?: string | null;
   document_id?: number | null;
+  client_signed?: boolean;
+  client_signed_name?: string | null;
+  client_signed_at?: string | null;
   submitted_at?: string | null;
   created_at?: string | null;
 }
@@ -396,6 +399,14 @@ export interface InspectionReportItem {
 export interface InspectionReportDetail extends InspectionReportItem {
   url: string;
   qr_png: string;
+}
+
+export interface PendingClientSignature {
+  report_id: number;
+  certificate_number: string;
+  job_id: number;
+  job_number?: string | null;
+  customer_name?: string | null;
 }
 
 export interface TrainableWorker {

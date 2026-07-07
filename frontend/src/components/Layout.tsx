@@ -66,7 +66,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { label: 'Jobs', icon: <WorkIcon />, path: '/jobs' },
       { label: 'New Job', icon: <AddIcon />, path: '/jobs/new', roles: ['administrator', 'staff'] },
       { label: 'NCRs', icon: <NCRIcon />, path: '/ncrs', roles: ['administrator', 'staff'] },
-      { label: 'Inspection Reports', icon: <QrCodeIcon />, path: '/inspection-reports', roles: ['administrator', 'staff'] },
+      { label: 'Inspection Reports', icon: <QrCodeIcon />, path: '/inspection-reports', roles: ['administrator', 'staff', 'client'] },
       { label: 'Reports', icon: <ReportIcon />, path: '/reports', roles: ['administrator', 'staff'] },
       { label: 'Settings', icon: <SettingsIcon />, path: '/settings' },
       { label: 'Appearance', icon: <PaletteIcon />, path: '/appearance' },

@@ -81,6 +81,12 @@ COLUMN_STATEMENTS = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ",
     # First-login terms acceptance timestamp (null until accepted).
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ",
+    # Client-portal inspection-report sign-off (client signs the filed report).
+    "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS client_signed BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS client_signed_name VARCHAR(255)",
+    "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS client_signature_png TEXT",
+    "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS client_signed_at TIMESTAMPTZ",
+    "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS client_signed_by_id INTEGER REFERENCES users(id)",
 )
 
 # One-off data fixes after the columns exist. Backfill is idempotent (the WHERE

@@ -246,6 +246,21 @@ class InspectionReport(Base):
     qc_reject: Mapped[str | None] = mapped_column(String(4), nullable=True)  # Y / N
     rework: Mapped[str | None] = mapped_column(String(4), nullable=True)     # Y / N
 
+    # Client-portal sign-off. Separate from ``customer_signed_name`` above
+    # (which is the on-site customer name typed on the public QR form). These
+    # are set when the assigned CLIENT signs the already-filed report from their
+    # own login: on sign the report PDF is re-rendered with the drawn signature
+    # embedded and the filed job document is replaced in place (option A).
+    client_signed: Mapped[bool] = mapped_column(Boolean, default=False)
+    client_signed_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    client_signature_png: Mapped[str | None] = mapped_column(Text, nullable=True)  # data URL
+    client_signed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    client_signed_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+
     payload: Mapped[str | None] = mapped_column(Text, nullable=True)         # JSON
     scanner_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(

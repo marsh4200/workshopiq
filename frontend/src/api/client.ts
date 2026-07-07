@@ -11,6 +11,7 @@ import type {
   Inspection,
   InspectionReportItem,
   InspectionReportDetail,
+  PendingClientSignature,
   JobDetail,
   JobListItem,
   JobCostItem,
@@ -423,6 +424,19 @@ export const getInspectionReport = async (id: number) =>
 
 export const deleteInspectionReport = (id: number) =>
   api.delete(`/inspection-reports/${id}`);
+
+// Client portal: reports on the client's assigned jobs, sign-off, and the
+// login nag for reports still awaiting their signature.
+export const listMyInspectionReports = async () =>
+  (await api.get<InspectionReportItem[]>('/inspection-reports/mine')).data;
+
+export const signInspectionReport = async (
+  id: number,
+  body: { signed_name: string; signature_png: string | null },
+) => (await api.post<InspectionReportItem>(`/inspection-reports/${id}/client-sign`, body)).data;
+
+export const getPendingClientSignatures = async () =>
+  (await api.get<PendingClientSignature[]>('/inspection-reports/pending-signatures')).data;
 
 // Public, no-auth form URL the QR points at (also used for "fill on screen").
 export const inspectionReportFormUrl = (token: string) =>

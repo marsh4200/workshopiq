@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Button, Rating, Stack, Typography } from '@mui/material';
 import StarOutlineIcon from '@mui/icons-material/StarBorderPurple500';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
+import BorderColorOutlinedIcon from '@mui/icons-material/BorderColorOutlined';
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import {
+  getPendingClientSignatures,
   getPendingClosures,
   getPendingInspections,
   getPendingReviews,
@@ -13,6 +15,7 @@ import {
 } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import type {
+  PendingClientSignature,
   PendingClosure,
   PendingInspection,
   PendingReview,
@@ -40,9 +43,72 @@ export default function ReviewNotifier() {
     );
   return (
     <>
+      <ClientSignatureNag />
       <ClientInspectionNag />
       <ClientNag />
     </>
+  );
+}
+
+/* ---------------- Client: inspection report awaiting signature nag ---------------- */
+function ClientSignatureNag() {
+  const navigate = useNavigate();
+  const [pending, setPending] = useState<PendingClientSignature[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPendingClientSignatures()
+      .then((items) => {
+        if (!cancelled) setPending(items);
+      })
+      .catch(() => {
+        if (!cancelled) setPending([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (pending.length === 0) return null;
+  const next = pending[0];
+  const more = pending.length - 1;
+
+  return (
+    <Box sx={{ mb: 2.5 }}>
+      <Alert
+        severity="warning"
+        icon={<BorderColorOutlinedIcon />}
+        sx={{
+          alignItems: 'center',
+          border: '1px solid',
+          borderColor: 'warning.main',
+          background: 'rgba(245,158,11,0.10)',
+        }}
+        action={
+          <Button
+            color="warning"
+            variant="contained"
+            size="small"
+            onClick={() => navigate('/inspection-reports')}
+          >
+            Sign now
+          </Button>
+        }
+      >
+        <Stack>
+          <Typography sx={{ fontWeight: 700 }}>
+            {next.certificate_number} needs your signature
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            The inspection report for {next.job_number} ({next.customer_name}) is ready for you to
+            sign.
+            {more > 0
+              ? ` ${more} other report${more === 1 ? '' : 's'} also awaiting your signature.`
+              : ''}
+          </Typography>
+        </Stack>
+      </Alert>
+    </Box>
   );
 }
 

@@ -10,6 +10,7 @@ import JobDetail from './pages/JobDetail';
 import NCRs from './pages/NCRs';
 import ClosureRequests from './pages/ClosureRequests';
 import InspectionReports from './pages/InspectionReports';
+import ClientInspectionReports from './pages/ClientInspectionReports';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Templates from './pages/Templates';
@@ -17,6 +18,14 @@ import Settings from './pages/Settings';
 import Appearance from './pages/Appearance';
 import Samba from './pages/Samba';
 import Training from './pages/Training';
+import { useAuth } from './context/AuthContext';
+
+// Clients get their own sign-off view of inspection reports; staff/admin get
+// the full generate/manage page. Same route, role-branched.
+function InspectionReportsRoute() {
+  const { isClient } = useAuth();
+  return isClient ? <ClientInspectionReports /> : <InspectionReports />;
+}
 
 export default function App() {
   return (
@@ -61,8 +70,8 @@ export default function App() {
         <Route
           path="/inspection-reports"
           element={
-            <ProtectedRoute roles={['administrator', 'staff']}>
-              <InspectionReports />
+            <ProtectedRoute>
+              <InspectionReportsRoute />
             </ProtectedRoute>
           }
         />

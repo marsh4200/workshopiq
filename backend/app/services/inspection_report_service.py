@@ -11,6 +11,7 @@ Layout, wording, column structure and field pairing follow
 """
 from __future__ import annotations
 
+import base64
 import io
 from datetime import datetime, timezone
 from pathlib import Path
@@ -237,13 +238,38 @@ def _yn(value: str | None) -> str:
     return "Y  /  N"
 
 
-def _kv_row(label: str, value: str, st, *, sign: bool = False) -> Table:
-    if sign:
+def _sig_image(data_url: str | None, max_w: float, max_h: float):
+    """Decode a ``data:image/png;base64,...`` signature to a fitted reportlab
+    Image, or ``None`` if it's empty/invalid. Scaled to fit the given box while
+    preserving aspect ratio (drawn signatures are wide-and-short)."""
+    if not data_url:
+        return None
+    try:
+        raw_b64 = data_url.split(",", 1)[1] if "," in data_url else data_url
+        raw = base64.b64decode(raw_b64)
+        from reportlab.lib.utils import ImageReader
+
+        iw, ih = ImageReader(io.BytesIO(raw)).getSize()
+        if not iw or not ih:
+            return None
+        scale = min(max_w / iw, max_h / ih)
+        img = Image(io.BytesIO(raw), width=iw * scale, height=ih * scale)
+        img.hAlign = "LEFT"
+        return img
+    except Exception:
+        return None
+
+
+def _kv_row(label: str, value: str, st, *, sign: bool = False,
+            sign_img=None, row_h: float = 8 * mm) -> Table:
+    if sign_img is not None:
+        rhs = sign_img
+    elif sign:
         rhs = Paragraph(f"<i>{value}</i>" if value else "&nbsp;", st["sign"])
     else:
         rhs = Paragraph(value or "&nbsp;", st["value"])
     t = Table([[Paragraph(label, st["label"]), rhs]], colWidths=[26 * mm, 62 * mm],
-              rowHeights=[8 * mm])
+              rowHeights=[row_h])
     t.setStyle(TableStyle([
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
@@ -279,18 +305,22 @@ def _signoff(d: dict, st) -> list:
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
     ]))
 
-    def col(title, name, date):
+    def col(title, name, date, *, sign_img_data: str | None = None):
         head = Table([[Paragraph(title, st["th"])]], colWidths=[88 * mm], rowHeights=[8 * mm])
         head.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), GREY),
             ("BOX", (0, 0), (-1, -1), 0.75, LINE),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ]))
+        # A drawn signature (client sign-off) gets a taller row so the scribble
+        # is legible; a typed/blank signature keeps the compact 8mm line.
+        sig_h = 14 * mm if sign_img_data else 8 * mm
+        img = _sig_image(sign_img_data, 60 * mm, sig_h - 2 * mm) if sign_img_data else None
         inner = Table(
             [[head],
              [_kv_row("NAME", name, st)],
              [_kv_row("DATE", date, st)],
-             [_kv_row("SIGNATURE", name, st, sign=True)]],
+             [_kv_row("SIGNATURE", name, st, sign=True, sign_img=img, row_h=sig_h)]],
             colWidths=[88 * mm],
         )
         inner.setStyle(TableStyle([
@@ -304,7 +334,8 @@ def _signoff(d: dict, st) -> list:
 
     cols = Table(
         [[col("INSPECTION EVERTON", d.get("inspector_name", ""), d.get("date", "")),
-          col("CUSTOMER", d.get("customer_signed_name", ""), d.get("customer_date", ""))]],
+          col("CUSTOMER", d.get("customer_signed_name", ""), d.get("customer_date", ""),
+              sign_img_data=d.get("customer_signature"))]],
         colWidths=[90 * mm, 90 * mm],
     )
     cols.setStyle(TableStyle([

@@ -38,10 +38,16 @@ from app.api.checkin import (
     public_base_url,
     qr_data_uri,
 )
-from app.api.deps import get_user_for_file, require_admin, require_staff
+from app.api.deps import (
+    get_current_user,
+    get_user_for_file,
+    require_admin,
+    require_staff,
+)
+from app.api.jobs import get_client_job_ids
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import Document, InspectionReport, Job, TimelineEvent, User
+from app.models import Document, InspectionReport, Job, TimelineEvent, User, UserRole
 from app.services import file_service, inspection_report_service
 from app.services.settings_service import next_ece_number
 
@@ -87,6 +93,9 @@ def _serialize(report: InspectionReport, job: Job | None) -> dict:
         "qc_reject": report.qc_reject,
         "rework": report.rework,
         "document_id": report.document_id,
+        "client_signed": report.client_signed,
+        "client_signed_name": report.client_signed_name,
+        "client_signed_at": report.client_signed_at.isoformat() if report.client_signed_at else None,
         "submitted_at": report.submitted_at.isoformat() if report.submitted_at else None,
         "created_at": report.created_at.isoformat() if report.created_at else None,
     }
@@ -175,6 +184,182 @@ async def blank_report_pdf(user: User = Depends(get_user_for_file)):
             "Content-Disposition": 'inline; filename="Inspection Report (blank).pdf"'
         },
     )
+
+
+# ------------------------- client portal: list / sign -------------------------
+# These string-path routes are declared BEFORE the "/{report_id}" int route so
+# "mine" / "pending-signatures" resolve here instead of failing int validation.
+
+
+async def _client_report_ids(db: AsyncSession, user: User) -> set[int]:
+    """Job ids this client may see reports for (empty for non-clients)."""
+    if user.role != UserRole.client.value:
+        return set()
+    return await get_client_job_ids(db, user.id)
+
+
+@router.get("/inspection-reports/mine")
+async def my_reports(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Filed inspection reports on the jobs this client is assigned to.
+
+    Only submitted (filed) reports are shown — a report that hasn't been filled
+    in and filed by the workshop yet isn't something the client can sign.
+    """
+    if user.role != UserRole.client.value:
+        raise HTTPException(status_code=403, detail="Clients only")
+    job_ids = await _client_report_ids(db, user)
+    if not job_ids:
+        return []
+    rows = (
+        await db.execute(
+            select(InspectionReport)
+            .options(selectinload(InspectionReport.job))
+            .where(InspectionReport.job_id.in_(job_ids))
+            .where(InspectionReport.submitted.is_(True))
+            .order_by(InspectionReport.submitted_at.desc())
+            .limit(200)
+        )
+    ).scalars().all()
+    return [_serialize(r, r.job) for r in rows]
+
+
+@router.get("/inspection-reports/pending-signatures")
+async def pending_signatures(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Filed-but-unsigned reports for the assigned client — drives the login nag."""
+    job_ids = await _client_report_ids(db, user)
+    if not job_ids:
+        return []
+    rows = (
+        await db.execute(
+            select(InspectionReport)
+            .options(selectinload(InspectionReport.job))
+            .where(InspectionReport.job_id.in_(job_ids))
+            .where(InspectionReport.submitted.is_(True))
+            .where(InspectionReport.client_signed.is_(False))
+            .order_by(InspectionReport.submitted_at.desc())
+        )
+    ).scalars().all()
+    return [
+        {
+            "report_id": r.id,
+            "certificate_number": r.certificate_number,
+            "job_id": r.job_id,
+            "job_number": r.job.job_number if r.job else None,
+            "customer_name": r.job.customer_name if r.job else None,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/inspection-reports/{report_id}/client-sign")
+async def client_sign_report(
+    report_id: int,
+    body: dict,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """The assigned client signs an already-filed inspection report.
+
+    Option A: the filed PDF is re-rendered with the client's signature embedded
+    in the CUSTOMER sign-off block and REPLACED in place, so the job keeps one
+    clean document. Also stamps the report as client-signed and writes the job
+    timeline. Allowed for the assigned client (or an administrator).
+    """
+    report = await db.get(InspectionReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    is_client = user.role == UserRole.client.value
+    if is_client:
+        allowed = await get_client_job_ids(db, user.id)
+        if report.job_id not in allowed:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif user.role != UserRole.administrator.value:
+        raise HTTPException(status_code=403, detail="Only the assigned client can sign")
+
+    if not report.submitted:
+        raise HTTPException(
+            status_code=409,
+            detail="This report hasn't been filed by the workshop yet.",
+        )
+
+    job = await db.get(Job, report.job_id)
+    if report.client_signed:
+        # Idempotent: already signed — just return current state.
+        return _serialize(report, job)
+
+    signed_name = (body.get("signed_name") or "").strip()
+    signature_png = (body.get("signature_png") or "").strip() or None
+    if not signed_name and not signature_png:
+        raise HTTPException(
+            status_code=400, detail="A typed name or a drawn signature is required."
+        )
+
+    # Rebuild the report data from the stored payload and inject the client's
+    # sign-off, then re-render the PDF.
+    try:
+        report_data = json.loads(report.payload or "{}")
+        if not isinstance(report_data, dict):
+            report_data = {}
+    except (ValueError, TypeError):
+        report_data = {}
+    signoff = report_data.setdefault("signoff", {})
+    signoff["customer_signed_name"] = signed_name or signoff.get("customer_signed_name") or ""
+    signoff["customer_date"] = _today()
+    if signature_png:
+        signoff["customer_signature"] = signature_png
+
+    pdf = await run_in_threadpool(inspection_report_service.render_report_pdf, report_data)
+
+    # Replace the filed document in place (same stored filename) so there's one
+    # clean document on the job. Fall back to creating one if it went missing.
+    file_service.UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+    doc = await db.get(Document, report.document_id) if report.document_id else None
+    if doc:
+        with open(file_service.file_path(doc.filename), "wb") as fh:
+            fh.write(pdf)
+    else:
+        stored = f"job{job.id}_{uuid.uuid4().hex}.pdf"
+        with open(file_service.file_path(stored), "wb") as fh:
+            fh.write(pdf)
+        doc = Document(
+            job_id=job.id,
+            filename=stored,
+            original_name=f"Inspection Report {report.certificate_number}.pdf",
+            content_type="application/pdf",
+            uploaded_by_id=report.created_by_id,
+        )
+        db.add(doc)
+        await db.flush()
+        report.document_id = doc.id
+
+    now = datetime.now(timezone.utc)
+    report.client_signed = True
+    report.client_signed_name = signed_name or None
+    report.client_signature_png = signature_png
+    report.client_signed_at = now
+    report.client_signed_by_id = user.id
+    report.customer_signed_name = signed_name or report.customer_signed_name
+    report.payload = json.dumps(report_data)
+
+    db.add(
+        TimelineEvent(
+            job_id=job.id,
+            event_type="inspection_report",
+            description=f"Inspection report {report.certificate_number} signed by client",
+            actor_name=signed_name or user.full_name or user.username,
+        )
+    )
+    await db.commit()
+    await db.refresh(report)
+    return _serialize(report, job)
 
 
 @router.get("/inspection-reports/{report_id}")
