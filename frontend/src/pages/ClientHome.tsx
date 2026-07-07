@@ -295,9 +295,21 @@ export default function ClientHome() {
               {jobBlurb(job)}
             </Typography>
           </Box>
-          <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
             <StatusBadge status={job.status} />
           </Box>
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<WorkIcon />}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/jobs/${job.id}`);
+            }}
+            sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+          >
+            Open job
+          </Button>
           <ExpandMoreIcon
             sx={{
               color: 'text.secondary',
@@ -310,7 +322,7 @@ export default function ClientHome() {
         <Collapse in={isOpen} unmountOnExit>
           <Divider />
           <Box sx={{ px: 2, py: 1.5 }}>
-            <Box sx={{ display: { xs: 'flex', sm: 'none' }, mb: 1.5 }}>
+            <Box sx={{ display: { xs: 'flex', md: 'none' }, mb: 1.5 }}>
               <StatusBadge status={job.status} />
             </Box>
 
@@ -388,15 +400,10 @@ export default function ClientHome() {
             )}
 
             <Divider sx={{ my: 1.5 }} />
-            <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-              <Typography variant="caption" color="text.secondary">
-                Received {fmtDay(job.date_received)}
-                {job.due_date ? ` · Due ${fmtDay(job.due_date)}` : ''}
-              </Typography>
-              <Button size="small" startIcon={<WorkIcon />} onClick={() => navigate(`/jobs/${job.id}`)}>
-                Open job
-              </Button>
-            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Received {fmtDay(job.date_received)}
+              {job.due_date ? ` · Due ${fmtDay(job.due_date)}` : ''}
+            </Typography>
           </Box>
         </Collapse>
       </Card>
