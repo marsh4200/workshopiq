@@ -46,6 +46,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PrintIcon from '@mui/icons-material/Print';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import StarBorderPurple500Icon from '@mui/icons-material/StarBorderPurple500';
 import {
   getJob,
   updateJob,
@@ -69,6 +70,7 @@ import {
   getCheckin,
   getReview,
   requestReview,
+  skipInspectionReview,
   getFinalInspection,
   releaseFinalInspection,
   cancelFinalInspection,
@@ -2012,6 +2014,25 @@ function FinalInspectionTab({
     }
   };
 
+  // ---- Skip inspection & send for review (no inspector → client review is the
+  // sign-off; submitting it auto-closes the job). Any staff, no approval. ----
+  const [skipOpen, setSkipOpen] = useState(false);
+  const [skipConfirmed, setSkipConfirmed] = useState(false);
+
+  const submitSkipReview = async () => {
+    setBusy(true);
+    try {
+      await skipInspectionReview(job.id);
+      setSkipOpen(false);
+      setSkipConfirmed(false);
+      await onUpdate();
+    } catch (e) {
+      setError(apiError(e, 'Could not send the job for review'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // Reusable "Request closure" button for staff (shown alongside the normal
   // inspection actions, for when a client won't do the final inspection).
   const requestClosureButton = (
@@ -2025,6 +2046,23 @@ function FinalInspectionTab({
       disabled={busy}
     >
       Request closure
+    </Button>
+  );
+
+  // Reusable "Skip inspection & send for review" button. For jobs with no
+  // inspector coming out — sends straight to the client for review instead.
+  const skipReviewButton = (
+    <Button
+      color="primary"
+      variant="outlined"
+      startIcon={<StarBorderPurple500Icon />}
+      onClick={() => {
+        setSkipConfirmed(false);
+        setSkipOpen(true);
+      }}
+      disabled={busy}
+    >
+      Skip inspection &amp; send for review
     </Button>
   );
 
@@ -2195,7 +2233,8 @@ function FinalInspectionTab({
                   This returns it to the Inspection stage and re-opens the sign-off
                   form for the client.
                 </Typography>
-                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
+                  {skipReviewButton}
                   {requestClosureButton}
                   <Button
                     variant="contained"
@@ -2358,7 +2397,8 @@ function FinalInspectionTab({
                 this was released by mistake or there's no inspector on the
                 client's side yet, cancel it and pull the job back.
               </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                {skipReviewButton}
                 {requestClosureButton}
                 <Button
                   variant="outlined"
@@ -2408,15 +2448,18 @@ function FinalInspectionTab({
                   it passes.
                 </Typography>
                 {rejectedNotice}
-                <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                   <Button variant="contained" onClick={openConfirm} disabled={busy}>
                     {busy ? 'Submitting…' : 'Submit final inspection'}
                   </Button>
+                  {skipReviewButton}
                   {requestClosureButton}
                 </Stack>
                 <Typography variant="caption" color="text.secondary">
-                  Not every client inspects. If this one won't, use “Request closure” —
-                  an admin approves it and the inspection passes internally.
+                  Not every client inspects. If this one won't, use “Request closure”
+                  (an admin approves it and the inspection passes internally), or “Skip
+                  inspection &amp; send for review” to send it straight to the client —
+                  their review then closes the job.
                 </Typography>
               </>
             )}
@@ -2528,6 +2571,43 @@ function FinalInspectionTab({
           </Button>
           <Button variant="contained" onClick={submitClosureRequest} disabled={busy}>
             {busy ? 'Requesting…' : 'Request closure'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={skipOpen}
+        onClose={() => !busy && setSkipOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Skip inspection & send for review?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary" sx={{ mb: 1.5 }}>
+            This skips the final inspection and sends the job straight to the client
+            for their review. When they submit their rating, the job closes
+            automatically. If they never review it, you can still request closure.
+          </Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={skipConfirmed}
+                onChange={(e) => setSkipConfirmed(e.target.checked)}
+              />
+            }
+            label="I confirm we're skipping the final inspection for this job."
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setSkipOpen(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={submitSkipReview}
+            disabled={!skipConfirmed || busy}
+          >
+            {busy ? 'Sending…' : 'Send for review'}
           </Button>
         </DialogActions>
       </Dialog>

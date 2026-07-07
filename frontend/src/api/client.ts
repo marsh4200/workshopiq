@@ -356,6 +356,10 @@ export const getJobReport = async (params: {
 // Customer reviews
 export const requestReview = async (jobId: number) =>
   (await api.post<Review>(`/jobs/${jobId}/review`)).data;
+// Skip the final inspection and send the job straight to the client for a
+// review (any staff, no admin approval). Submitting the review auto-closes it.
+export const skipInspectionReview = async (jobId: number) =>
+  (await api.post<Review>(`/jobs/${jobId}/review/skip-inspection`)).data;
 export const getReview = async (jobId: number) =>
   (await api.get<Review | null>(`/jobs/${jobId}/review`)).data;
 export const submitReview = async (

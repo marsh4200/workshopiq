@@ -78,6 +78,74 @@ async def request_review(
     return review
 
 
+@router.post(
+    "/jobs/{job_id}/review/skip-inspection",
+    response_model=ReviewOut,
+    status_code=201,
+)
+async def skip_inspection_request_review(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+):
+    """Skip the final inspection and send the job straight to the client for a
+    review.
+
+    For jobs where no inspector is coming out: instead of a formal final
+    inspection sign-off, the client's review becomes the acceptance. Submitting
+    the review auto-closes the job the normal way (see submit_review). If the
+    client never reviews, staff can still fall back to Request closure — that
+    path is untouched. Any staff member can trigger this; no admin approval,
+    because the client's own review is the sign-off.
+    """
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Don't collide with the inspection / closure paths.
+    fi_result = await db.execute(
+        select(FinalInspection).where(FinalInspection.job_id == job_id)
+    )
+    final_inspection = fi_result.scalar_one_or_none()
+    if final_inspection and final_inspection.completed:
+        raise HTTPException(
+            status_code=409,
+            detail="The final inspection is already complete — request the review normally.",
+        )
+    if final_inspection and final_inspection.closure_status == "pending":
+        raise HTTPException(
+            status_code=409,
+            detail="A closure request is pending admin approval — decide that first.",
+        )
+
+    review = await _get_review(db, job_id)
+    if review:
+        return review  # already requested (completed or not)
+
+    review = JobReview(job_id=job_id, requested_by_id=user.id)
+    db.add(review)
+    await log_event(
+        db,
+        job_id,
+        "review",
+        "Final inspection skipped — job sent to customer for review",
+        user,
+    )
+    if job.status != "Awaiting Customer Review":
+        old = job.status
+        job.status = "Awaiting Customer Review"
+        await log_event(
+            db,
+            job_id,
+            "status_change",
+            f"Status changed: {old} → Awaiting Customer Review",
+            user,
+        )
+    await db.commit()
+    await db.refresh(review)
+    return review
+
+
 @router.get("/jobs/{job_id}/review", response_model=ReviewOut | None)
 async def get_review(
     job_id: int,
@@ -145,6 +213,10 @@ async def pending_reviews(
         select(Job)
         .join(JobReview, JobReview.job_id == Job.id)
         .where(JobReview.completed.is_(False))
+        # A job that's already been closed by another path (e.g. an approved
+        # closure request after a skipped inspection) should stop nagging for a
+        # review it will never receive.
+        .where(Job.status != "Closed")
         .order_by(Job.sequence.desc())
     )
     if user.role == UserRole.client.value:
