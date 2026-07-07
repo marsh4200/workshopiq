@@ -35,6 +35,8 @@ import StorageIcon from '@mui/icons-material/Storage';
 import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import ReportIcon from '@mui/icons-material/AssessmentOutlined';
 import NCRIcon from '@mui/icons-material/ReportProblemOutlined';
+import BorderColorOutlinedIcon from '@mui/icons-material/BorderColorOutlined';
+import StarBorderIcon from '@mui/icons-material/StarBorderPurple500';
 import LogoutIcon from '@mui/icons-material/Logout';
 import KeyIcon from '@mui/icons-material/VpnKeyOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -46,7 +48,7 @@ import { useThemeMode } from '../context/ThemeModeContext';
 import { Logomark } from './common';
 import { useDeviceType } from '../hooks/useDeviceType';
 import ReviewNotifier from './ReviewNotifier';
-import { getPendingClosures } from '../api/client';
+import { getPendingClientSignatures, getPendingClosures, getPendingReviews } from '../api/client';
 import { fontDisplay, fontMono } from '../theme/theme';
 
 const DRAWER = 262;
@@ -84,8 +86,32 @@ const NAV: { section: string; items: NavItem[] }[] = [
   },
 ];
 
+// Clients get a simpler, action-first sidebar: their jobs, the two things that
+// need them (with live badge counts), and their account. Kept separate from NAV
+// so the staff/admin menu is untouched.
+const CLIENT_NAV: { section: string; items: NavItem[] }[] = [
+  {
+    section: 'Your workshop',
+    items: [{ label: 'My jobs', icon: <DashboardIcon />, path: '/' }],
+  },
+  {
+    section: 'Needs you',
+    items: [
+      { label: 'Reports to sign', icon: <BorderColorOutlinedIcon />, path: '/inspection-reports' },
+      { label: 'Jobs to review', icon: <StarBorderIcon />, path: '/reviews' },
+    ],
+  },
+  {
+    section: 'Account',
+    items: [
+      { label: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+      { label: 'Appearance', icon: <PaletteIcon />, path: '/appearance' },
+    ],
+  },
+];
+
 export default function Layout() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isClient } = useAuth();
   const { settings } = useSettings();
   const { mode, setPreference } = useThemeMode();
   const navigate = useNavigate();
@@ -95,6 +121,8 @@ export default function Layout() {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const [denyMsg, setDenyMsg] = useState('');
   const [closureCount, setClosureCount] = useState(0);
+  const [signCount, setSignCount] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -113,6 +141,31 @@ export default function Layout() {
       clearInterval(id);
     };
   }, [isAdmin]);
+
+  // Client sidebar badges: reports awaiting their signature and jobs awaiting
+  // their review. Same polling shape as the admin closure badge above.
+  useEffect(() => {
+    if (!isClient) return;
+    let cancelled = false;
+    const poll = () => {
+      getPendingClientSignatures()
+        .then((items) => {
+          if (!cancelled) setSignCount(items.length);
+        })
+        .catch(() => undefined);
+      getPendingReviews()
+        .then((items) => {
+          if (!cancelled) setReviewCount(items.length);
+        })
+        .catch(() => undefined);
+    };
+    poll();
+    const id = setInterval(poll, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [isClient]);
   // Soft refresh for the APK / installed app, where there's no browser reload.
   // Bumping this key remounts the routed page so its data re-fetches — no full
   // page reload, the session and bundle stay put.
@@ -128,15 +181,17 @@ export default function Layout() {
 
   const visible = (i: NavItem) => !i.roles || (user && i.roles.includes(user.role));
 
+  const activeNav = isClient ? CLIENT_NAV : NAV;
+
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname === path;
 
   const pageTitle = useMemo(() => {
-    const all = NAV.flatMap((s) => s.items);
+    const all = activeNav.flatMap((s) => s.items);
     if (location.pathname.startsWith('/jobs/') && location.pathname !== '/jobs/new') return 'Job Detail';
     return all.find((i) => isActive(i.path))?.label ?? 'WorkshopIQ';
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
+  }, [location.pathname, isClient]);
 
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -154,7 +209,7 @@ export default function Layout() {
       <Divider />
 
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 1.5 }}>
-        {NAV.map((group) => {
+        {activeNav.map((group) => {
           const items = group.items.filter(visible);
           if (!items.length) return null;
           return (
@@ -192,13 +247,24 @@ export default function Layout() {
                       }}
                     >
                       <ListItemIcon sx={{ color: active ? 'primary.main' : 'text.secondary', minWidth: 38 }}>
-                        {item.path === '/closure-requests' && closureCount > 0 ? (
-                          <Badge badgeContent={closureCount} color="warning">
-                            {item.icon}
-                          </Badge>
-                        ) : (
-                          item.icon
-                        )}
+                        {(() => {
+                          const badge =
+                            item.path === '/closure-requests'
+                              ? closureCount
+                              : item.path === '/inspection-reports' && isClient
+                                ? signCount
+                                : item.path === '/reviews'
+                                  ? reviewCount
+                                  : 0;
+                          const badgeColor = item.path === '/reviews' ? 'primary' : 'warning';
+                          return badge > 0 ? (
+                            <Badge badgeContent={badge} color={badgeColor}>
+                              {item.icon}
+                            </Badge>
+                          ) : (
+                            item.icon
+                          );
+                        })()}
                       </ListItemIcon>
                       <ListItemText
                         primaryTypographyProps={{ fontWeight: active ? 700 : 500, fontSize: 14 }}

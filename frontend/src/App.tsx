@@ -4,6 +4,8 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import ChangePassword from './pages/ChangePassword';
 import Dashboard from './pages/Dashboard';
+import ClientHome from './pages/ClientHome';
+import ClientReviews from './pages/ClientReviews';
 import Jobs from './pages/Jobs';
 import NewJob from './pages/NewJob';
 import JobDetail from './pages/JobDetail';
@@ -27,6 +29,13 @@ function InspectionReportsRoute() {
   return isClient ? <ClientInspectionReports /> : <InspectionReports />;
 }
 
+// Clients get a friendly portal home (needs-you cards + job folders); staff and
+// admin keep the operations dashboard. Same route, role-branched.
+function HomeRoute() {
+  const { isClient } = useAuth();
+  return isClient ? <ClientHome /> : <Dashboard />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -40,7 +49,15 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<HomeRoute />} />
+        <Route
+          path="/reviews"
+          element={
+            <ProtectedRoute roles={['client']}>
+              <ClientReviews />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/jobs" element={<Jobs />} />
         <Route
           path="/jobs/new"
