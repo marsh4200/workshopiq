@@ -1886,6 +1886,14 @@ function FinalInspectionTab({
   setError: (s: string) => void;
 }) {
   const fi = job.final_inspection || null;
+  // Once the job has been sent to the customer for review (either the normal
+  // way or via skip-inspection) it's "Awaiting Customer Review"; once done it's
+  // "Closed". In both cases the inspection actions must not stay live: submit &
+  // skip lock in both states; request closure stays available while awaiting a
+  // review (as a fallback) but locks once the job is closed.
+  const reviewSent = job.status === 'Awaiting Customer Review';
+  const isClosed = job.status === 'Closed';
+  const lockInspectionActions = reviewSent || isClosed;
   const [name, setName] = useState('');
   const [reference, setReference] = useState('');
   const [reason, setReason] = useState('');
@@ -2043,7 +2051,7 @@ function FinalInspectionTab({
         setClosureReason('');
         setClosureOpen(true);
       }}
-      disabled={busy}
+      disabled={busy || isClosed}
     >
       Request closure
     </Button>
@@ -2060,7 +2068,7 @@ function FinalInspectionTab({
         setSkipConfirmed(false);
         setSkipOpen(true);
       }}
-      disabled={busy}
+      disabled={busy || lockInspectionActions}
     >
       Skip inspection &amp; send for review
     </Button>
@@ -2428,6 +2436,25 @@ function FinalInspectionTab({
                 The final inspection isn't available yet. It will appear here once the
                 workshop releases it.
               </Typography>
+            ) : isClosed || reviewSent ? (
+              <>
+                <Alert
+                  severity={isClosed ? 'success' : 'info'}
+                  variant="outlined"
+                  sx={{ width: '100%' }}
+                >
+                  {isClosed
+                    ? 'This job is closed — no further inspection actions are needed.'
+                    : 'This job has been sent to the customer for their review. When they submit it, the job closes automatically. If they don’t respond, you can still request closure.'}
+                </Alert>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <Button variant="contained" onClick={openConfirm} disabled>
+                    Submit final inspection
+                  </Button>
+                  {skipReviewButton}
+                  {requestClosureButton}
+                </Stack>
+              </>
             ) : !job.checked_in ? (
               <Alert severity="info" variant="outlined" sx={{ width: '100%' }}>
                 <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
@@ -2449,7 +2476,11 @@ function FinalInspectionTab({
                 </Typography>
                 {rejectedNotice}
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Button variant="contained" onClick={openConfirm} disabled={busy}>
+                  <Button
+                    variant="contained"
+                    onClick={openConfirm}
+                    disabled={busy || lockInspectionActions}
+                  >
                     {busy ? 'Submitting…' : 'Submit final inspection'}
                   </Button>
                   {skipReviewButton}

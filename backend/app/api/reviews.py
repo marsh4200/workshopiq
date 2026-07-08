@@ -101,6 +101,8 @@ async def skip_inspection_request_review(
     job = await db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if job.status == "Closed":
+        raise HTTPException(status_code=409, detail="This job is already closed.")
 
     # Don't collide with the inspection / closure paths.
     fi_result = await db.execute(
