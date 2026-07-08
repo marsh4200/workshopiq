@@ -164,6 +164,7 @@ export interface AppSettings {
   backup_before_update?: boolean;
   backup_keep?: number;
   maintenance_mode?: boolean;
+  server_shutdown?: boolean;
 }
 
 export interface SambaStatus {

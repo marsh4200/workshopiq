@@ -30,7 +30,12 @@ from app.api import (
 from app.core.bootstrap import run_bootstrap
 from app.core.config import settings
 from app.core.security import decode_token
-from app.services.maintenance import MAINTENANCE_MESSAGE, is_maintenance_on
+from app.services.maintenance import (
+    MAINTENANCE_MESSAGE,
+    SHUTDOWN_MESSAGE,
+    is_maintenance_on,
+    is_shutdown_on,
+)
 from app.services.samba_scheduler import scheduler_loop
 
 logging.basicConfig(level=logging.INFO)
@@ -125,6 +130,20 @@ _MAINTENANCE_HTML = f"""<!doctype html>
 <h1>Server under maintenance</h1><p>{MAINTENANCE_MESSAGE}</p>
 </div></body></html>"""
 
+_SHUTDOWN_HTML = f"""<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Server shut down</title>
+<style>
+  body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0e16;
+       color:#e2e8f0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}}
+  .card{{max-width:420px;margin:16px;padding:32px;border:1px solid rgba(148,163,184,.18);
+        border-radius:16px;background:#0c1322;text-align:center}}
+  h1{{font-size:20px;margin:0 0 12px}} p{{color:#94a3b8;line-height:1.6;margin:0}}
+  .dot{{font-size:34px;margin-bottom:10px}}
+</style></head><body><div class="card"><div class="dot">⛔</div>
+<h1>Server shut down</h1><p>{SHUTDOWN_MESSAGE}</p>
+</div></body></html>"""
+
 
 def _is_admin_request(request: Request) -> bool:
     """True if the request carries a valid administrator token (header or ?token=)."""
@@ -149,16 +168,27 @@ async def maintenance_gate(request: Request, call_next):
         or path in _MAINTENANCE_EXEMPT_PATHS
     ):
         return await call_next(request)
-    if not await is_maintenance_on():
+    # Shutdown is the deeper lock, so check it first and let it win over
+    # maintenance when both happen to be on.
+    shutdown_on = await is_shutdown_on()
+    maintenance_on = shutdown_on or await is_maintenance_on()
+    if not maintenance_on:
         return await call_next(request)
     if _is_admin_request(request):
         return await call_next(request)
-    # Non-admin during maintenance. Browser navigations (e.g. the public
-    # inspection-report form or a document link) get a small HTML page;
+    # Non-admin during shutdown/maintenance. Browser navigations (e.g. the
+    # public inspection-report form or a document link) get a small HTML page;
     # everything else gets JSON the frontend recognises.
     from fastapi.responses import HTMLResponse, JSONResponse
 
     accept = request.headers.get("accept", "")
+    if shutdown_on:
+        if request.method == "GET" and "text/html" in accept:
+            return HTMLResponse(_SHUTDOWN_HTML, status_code=503)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": SHUTDOWN_MESSAGE, "shutdown": True, "maintenance": True},
+        )
     if request.method == "GET" and "text/html" in accept:
         return HTMLResponse(_MAINTENANCE_HTML, status_code=503)
     return JSONResponse(

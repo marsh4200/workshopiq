@@ -23,6 +23,8 @@ import { Logomark } from '../components/common';
 const MAINTENANCE_MSG =
   'This server is currently under maintenance. Please try again later. If this continues, please contact the Everton administration team.';
 
+const SHUTDOWN_MSG = 'This server has been shut down. Please contact your administrator.';
+
 const CAPABILITIES = [
   ['01', 'Intake', 'Log jobs the moment they arrive'],
   ['02', 'Inspection', 'Structured checks against templates'],
@@ -43,12 +45,19 @@ export default function Login() {
   const [maintenance, setMaintenance] = useState(
     () => sessionStorage.getItem('wiq-maintenance') === '1',
   );
+  // Set by the API interceptor when a signed-in staff/client is bounced by
+  // server-shutdown mode — shows the shutdown wording instead.
+  const [shutdown, setShutdown] = useState(
+    () => sessionStorage.getItem('wiq-shutdown') === '1',
+  );
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setMaintenance(false);
+    setShutdown(false);
     sessionStorage.removeItem('wiq-maintenance');
+    sessionStorage.removeItem('wiq-shutdown');
     setLoading(true);
     try {
       const { must_change_password } = await login(username, password, remember);
@@ -149,7 +158,13 @@ export default function Login() {
             Enter your credentials to continue.
           </Typography>
 
-          {maintenance && (
+          {shutdown && (
+            <Alert severity="error" variant="outlined" sx={{ mb: 2 }}>
+              {SHUTDOWN_MSG}
+            </Alert>
+          )}
+
+          {maintenance && !shutdown && (
             <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
               {MAINTENANCE_MSG}
             </Alert>

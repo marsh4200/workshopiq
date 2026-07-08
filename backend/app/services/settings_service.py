@@ -41,6 +41,10 @@ DEFAULTS = {
     # Maintenance mode: when "1", only administrators can sign in / use the
     # API. Staff and clients get a 503 with a friendly maintenance message.
     "maintenance_mode": "0",
+    # Server shutdown: a deeper lock than maintenance. When "1", only
+    # administrators can sign in / use the API and everyone else is told the
+    # server has been shut down. Takes precedence over maintenance_mode.
+    "server_shutdown": "0",
     "smb_last_backup_at": "",
     "smb_last_backup_status": "",
 }

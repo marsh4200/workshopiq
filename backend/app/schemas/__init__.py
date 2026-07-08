@@ -77,6 +77,7 @@ class SettingsOut(BaseModel):
     backup_before_update: bool = True
     backup_keep: int = 2
     maintenance_mode: bool = False
+    server_shutdown: bool = False
 
 
 class SettingsUpdate(BaseModel):
@@ -93,6 +94,7 @@ class SettingsUpdate(BaseModel):
     backup_before_update: Optional[bool] = None
     backup_keep: Optional[int] = None
     maintenance_mode: Optional[bool] = None
+    server_shutdown: Optional[bool] = None
 
 
 # ---------- Samba network-drive backup ----------

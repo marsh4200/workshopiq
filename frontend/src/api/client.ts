@@ -59,16 +59,20 @@ api.interceptors.response.use(
       clearToken();
       if (!window.location.pathname.includes('/login')) window.location.href = '/login';
     }
-    // Maintenance mode: the server refuses non-admin requests with a tagged
-    // 503. Drop the session and send the person to the login screen, where a
-    // maintenance banner explains what's going on.
-    const maintData = error.response?.data as { maintenance?: boolean } | undefined;
+    // Maintenance mode / server shutdown: the server refuses non-admin requests
+    // with a tagged 503. Drop the session and send the person to the login
+    // screen, where a banner explains what's going on. Shutdown is flagged
+    // separately so login shows the "server shut down" wording.
+    const maintData = error.response?.data as
+      | { maintenance?: boolean; shutdown?: boolean }
+      | undefined;
     if (
       error.response?.status === 503 &&
-      maintData?.maintenance &&
+      (maintData?.maintenance || maintData?.shutdown) &&
       !error.config?.url?.includes('/auth/login')
     ) {
-      sessionStorage.setItem('wiq-maintenance', '1');
+      if (maintData?.shutdown) sessionStorage.setItem('wiq-shutdown', '1');
+      else sessionStorage.setItem('wiq-maintenance', '1');
       clearToken();
       if (!window.location.pathname.includes('/login')) window.location.href = '/login';
     }

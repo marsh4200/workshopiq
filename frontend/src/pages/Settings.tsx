@@ -26,6 +26,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import BuildIcon from '@mui/icons-material/Build';
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import {
   getSettings,
   updateSettings,
@@ -81,6 +82,12 @@ export default function Settings() {
   // off switch can never be lost.
   const [showMaint, setShowMaint] = useState(false);
   const [maintBusy, setMaintBusy] = useState(false);
+  // Second hidden control, tucked *inside* the maintenance card — revealed by
+  // tapping the faint "· · ·" at the bottom of that card. Turns the server into
+  // an admin-only lockout that tells staff/clients it has been shut down.
+  // Auto-revealed while active so the off switch can never be lost.
+  const [showShutdown, setShowShutdown] = useState(false);
+  const [shutdownBusy, setShutdownBusy] = useState(false);
 
   const toggleMaintenance = async (on: boolean) => {
     setMaintBusy(true);
@@ -98,6 +105,25 @@ export default function Settings() {
       setError(apiError(e, 'Failed to change maintenance mode'));
     } finally {
       setMaintBusy(false);
+    }
+  };
+
+  const toggleShutdown = async (on: boolean) => {
+    setShutdownBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      const updated = await updateSettings({ server_shutdown: on });
+      setS(updated);
+      setMsg(
+        on
+          ? 'Server shutdown is ON — only administrators can sign in. Everyone else is told the server has been shut down.'
+          : 'Server shutdown is OFF — normal access restored.',
+      );
+    } catch (e) {
+      setError(apiError(e, 'Failed to change server shutdown'));
+    } finally {
+      setShutdownBusy(false);
     }
   };
 
@@ -651,12 +677,16 @@ export default function Settings() {
         </Section>
       )}
 
-      {isAdmin && s && (showMaint || s.maintenance_mode) && (
+      {isAdmin && s && (showMaint || s.maintenance_mode || s.server_shutdown) && (
         <Card
           sx={{
             mb: 3,
             border: '1px solid',
-            borderColor: s.maintenance_mode ? 'warning.main' : 'divider',
+            borderColor: s.server_shutdown
+              ? 'error.main'
+              : s.maintenance_mode
+              ? 'warning.main'
+              : 'divider',
           }}
         >
           <CardContent>
@@ -696,6 +726,78 @@ export default function Settings() {
                 restore normal access.
               </Alert>
             )}
+
+            {/* Second hidden control, nested behind this one. Tap the faint
+                dots to reveal the server-shutdown lock. */}
+            {(showShutdown || s.server_shutdown) && (
+              <Box
+                sx={{
+                  mt: 3,
+                  pt: 2.5,
+                  borderTop: '1px dashed',
+                  borderColor: 'divider',
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                  <PowerSettingsNewIcon
+                    sx={{ color: s.server_shutdown ? 'error.main' : 'text.disabled' }}
+                  />
+                  <Typography variant="h6" fontWeight={700}>
+                    Server Shutdown
+                  </Typography>
+                  {s.server_shutdown && (
+                    <Chip label="ACTIVE" color="error" size="small" sx={{ fontWeight: 800 }} />
+                  )}
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  A deeper lock than maintenance. When enabled, only administrators can
+                  sign in. Any staff or client who tries to log in is told: “This server
+                  has been shut down. Please contact your administrator.” Administrators
+                  keep full access so you can turn it back off.
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={!!s.server_shutdown}
+                      disabled={shutdownBusy}
+                      color="error"
+                      onChange={(e) => toggleShutdown(e.target.checked)}
+                    />
+                  }
+                  label={
+                    <Typography fontWeight={700}>
+                      {s.server_shutdown ? 'Server shutdown is ON' : 'Enable server shutdown'}
+                    </Typography>
+                  }
+                />
+                {s.server_shutdown && (
+                  <Alert severity="error" variant="outlined" sx={{ mt: 2 }}>
+                    Only administrators can sign in right now. Staff and clients see the
+                    shutdown message. Turn this off to restore normal access.
+                  </Alert>
+                )}
+              </Box>
+            )}
+
+            {/* Hidden trigger for the shutdown lock — only reachable once this
+                (already hidden) maintenance card is open. */}
+            <Box sx={{ textAlign: 'center', mt: 2 }}>
+              <Typography
+                variant="caption"
+                onClick={() => setShowShutdown((v) => !v)}
+                sx={{
+                  color: 'text.disabled',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  letterSpacing: 6,
+                  px: 3,
+                  py: 1,
+                  display: 'inline-block',
+                }}
+              >
+                · · ·
+              </Typography>
+            </Box>
           </CardContent>
         </Card>
       )}

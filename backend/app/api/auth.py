@@ -37,10 +37,18 @@ async def login(
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is disabled")
 
-    # Maintenance mode: only administrators may sign in while it's active.
+    # Server shutdown / maintenance mode: only administrators may sign in while
+    # either is active. Shutdown is the deeper lock and takes precedence.
     if user.role != "administrator":
-        from app.services.maintenance import MAINTENANCE_MESSAGE, is_maintenance_on
+        from app.services.maintenance import (
+            MAINTENANCE_MESSAGE,
+            SHUTDOWN_MESSAGE,
+            is_maintenance_on,
+            is_shutdown_on,
+        )
 
+        if await is_shutdown_on():
+            raise HTTPException(status_code=503, detail=SHUTDOWN_MESSAGE)
         if await is_maintenance_on():
             raise HTTPException(status_code=503, detail=MAINTENANCE_MESSAGE)
 

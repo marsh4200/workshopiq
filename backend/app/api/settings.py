@@ -38,6 +38,8 @@ async def _build_settings_out(db: AsyncSession) -> SettingsOut:
         backup_keep=int(s.get("backup_keep", "2") or 2),
         maintenance_mode=str(s.get("maintenance_mode", "0")).lower()
         in ("1", "true", "yes", "on"),
+        server_shutdown=str(s.get("server_shutdown", "0")).lower()
+        in ("1", "true", "yes", "on"),
     )
 
 
@@ -65,6 +67,10 @@ async def update_settings(
         from app.services.maintenance import bust_cache
 
         bust_cache(bool(fields["maintenance_mode"]))
+    if "server_shutdown" in fields:
+        from app.services.maintenance import bust_shutdown_cache
+
+        bust_shutdown_cache(bool(fields["server_shutdown"]))
     return await _build_settings_out(db)
 
 

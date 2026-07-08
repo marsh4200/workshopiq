@@ -16,8 +16,14 @@ MAINTENANCE_MESSAGE = (
     "If this continues, please contact the Everton administration team."
 )
 
+# Server shutdown: a deeper lock than maintenance. Same admin-only behaviour,
+# but the wording tells staff/clients the server has been shut down. Kept in
+# its own flag/cache so it can be toggled independently of maintenance_mode.
+SHUTDOWN_MESSAGE = "This server has been shut down. Please contact your administrator."
+
 CACHE_TTL = 3.0
 _cache: dict = {"value": False, "at": 0.0}
+_shutdown_cache: dict = {"value": False, "at": 0.0}
 
 _TRUTHY = ("1", "true", "yes", "on")
 
@@ -29,6 +35,15 @@ def bust_cache(value: bool | None = None) -> None:
     else:
         _cache["value"] = bool(value)
         _cache["at"] = time.monotonic()
+
+
+def bust_shutdown_cache(value: bool | None = None) -> None:
+    """Force the next shutdown check to hit the DB, or pin a fresh value."""
+    if value is None:
+        _shutdown_cache["at"] = 0.0
+    else:
+        _shutdown_cache["value"] = bool(value)
+        _shutdown_cache["at"] = time.monotonic()
 
 
 async def is_maintenance_on() -> bool:
@@ -43,4 +58,19 @@ async def is_maintenance_on() -> bool:
     on = str(raw or "").lower() in _TRUTHY
     _cache["value"] = on
     _cache["at"] = now
+    return on
+
+
+async def is_shutdown_on() -> bool:
+    now = time.monotonic()
+    if now - _shutdown_cache["at"] < CACHE_TTL:
+        return bool(_shutdown_cache["value"])
+    try:
+        async with AsyncSessionLocal() as db:
+            raw = await get_setting(db, "server_shutdown", "0")
+    except Exception:  # noqa: BLE001 — never let the gate take the app down
+        return bool(_shutdown_cache["value"])
+    on = str(raw or "").lower() in _TRUTHY
+    _shutdown_cache["value"] = on
+    _shutdown_cache["at"] = now
     return on
