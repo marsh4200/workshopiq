@@ -77,6 +77,19 @@ async def get_client_job_ids(db: AsyncSession, user_id: int) -> set[int]:
     return set(result.scalars().all())
 
 
+async def job_has_client_access(db: AsyncSession, job_id: int) -> bool:
+    """True if at least one client has been granted access to this job.
+
+    Actions that push work to the customer — releasing the final inspection,
+    requesting a review, or skipping the inspection straight to review — require
+    this. Without it the job would 'send' to nobody and just sit on the server.
+    """
+    result = await db.execute(
+        select(ClientJobAccess.id).where(ClientJobAccess.job_id == job_id).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def assert_can_view(db: AsyncSession, job: Job, user: User) -> None:
     if user.role == UserRole.client.value:
         allowed = await get_client_job_ids(db, user.id)

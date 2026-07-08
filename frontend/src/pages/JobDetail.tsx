@@ -1894,6 +1894,9 @@ function FinalInspectionTab({
   const reviewSent = job.status === 'Awaiting Customer Review';
   const isClosed = job.status === 'Closed';
   const lockInspectionActions = reviewSent || isClosed;
+  // Releasing the inspection or sending for review pushes work to the assigned
+  // client — block it (and the server does too) until at least one is assigned.
+  const hasClientAccess = job.client_user_ids.length > 0;
   const [name, setName] = useState('');
   const [reference, setReference] = useState('');
   const [reason, setReason] = useState('');
@@ -2068,11 +2071,20 @@ function FinalInspectionTab({
         setSkipConfirmed(false);
         setSkipOpen(true);
       }}
-      disabled={busy || lockInspectionActions}
+      disabled={busy || lockInspectionActions || !hasClientAccess}
     >
       Skip inspection &amp; send for review
     </Button>
   );
+
+  // Shown wherever a client-facing action is offered but nobody's assigned yet.
+  const clientAccessHint = !hasClientAccess ? (
+    <Alert severity="warning" variant="outlined" sx={{ width: '100%' }}>
+      No client has access to this job yet. Add at least one under the{' '}
+      <strong>Client Access</strong> tab before releasing the inspection or sending
+      it for review.
+    </Alert>
+  ) : null;
 
   // Shown after an admin has declined a previous closure request.
   const rejectedNotice =
@@ -2241,6 +2253,7 @@ function FinalInspectionTab({
                   This returns it to the Inspection stage and re-opens the sign-off
                   form for the client.
                 </Typography>
+                {clientAccessHint}
                 <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
                   {skipReviewButton}
                   {requestClosureButton}
@@ -2248,7 +2261,7 @@ function FinalInspectionTab({
                     variant="contained"
                     color="primary"
                     onClick={openConfirm}
-                    disabled={busy}
+                    disabled={busy || !hasClientAccess}
                   >
                     {busy ? 'Sending…' : 'Send for re-inspection'}
                   </Button>
@@ -2475,11 +2488,12 @@ function FinalInspectionTab({
                   it passes.
                 </Typography>
                 {rejectedNotice}
+                {clientAccessHint}
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                   <Button
                     variant="contained"
                     onClick={openConfirm}
-                    disabled={busy || lockInspectionActions}
+                    disabled={busy || lockInspectionActions || !hasClientAccess}
                   >
                     {busy ? 'Submitting…' : 'Submit final inspection'}
                   </Button>
@@ -2825,10 +2839,16 @@ function ReviewTab({
                   The final inspection must be completed before a review can be requested.
                 </Typography>
               )}
+              {job.client_user_ids.length === 0 && (
+                <Typography variant="body2" color="warning.main">
+                  Assign at least one client under the Client Access tab first —
+                  otherwise there's nobody to send the review to.
+                </Typography>
+              )}
               <Button
                 variant="contained"
                 onClick={handleRequest}
-                disabled={busy || !finalDone}
+                disabled={busy || !finalDone || job.client_user_ids.length === 0}
               >
                 {busy ? 'Requesting…' : 'Request customer review'}
               </Button>

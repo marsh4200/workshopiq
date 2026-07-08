@@ -13,7 +13,13 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_staff
-from app.api.jobs import actor_name, assert_can_view, get_client_job_ids, log_event
+from app.api.jobs import (
+    actor_name,
+    assert_can_view,
+    get_client_job_ids,
+    job_has_client_access,
+    log_event,
+)
 from app.core.database import get_db
 from app.models import FinalInspection, Job, JobReview, ReviewSeen, User, UserRole
 from app.schemas import (
@@ -44,6 +50,14 @@ async def request_review(
     job = await db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # The review is sent to the assigned client — there must be at least one.
+    if not await job_has_client_access(db, job_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Assign at least one client under the Client Access tab before "
+            "requesting a review.",
+        )
 
     # A review can only be requested once the final inspection is complete.
     fi_result = await db.execute(
@@ -103,6 +117,14 @@ async def skip_inspection_request_review(
         raise HTTPException(status_code=404, detail="Job not found")
     if job.status == "Closed":
         raise HTTPException(status_code=409, detail="This job is already closed.")
+
+    # The review is sent to the assigned client — there must be at least one.
+    if not await job_has_client_access(db, job_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Assign at least one client under the Client Access tab before "
+            "sending the job for review.",
+        )
 
     # Don't collide with the inspection / closure paths.
     fi_result = await db.execute(

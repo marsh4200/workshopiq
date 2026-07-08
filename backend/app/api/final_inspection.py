@@ -32,6 +32,7 @@ from app.api.jobs import (
     actor_name,
     assert_can_view,
     get_client_job_ids,
+    job_has_client_access,
     log_event,
 )
 from app.core.database import get_db
@@ -137,6 +138,15 @@ async def release_final_inspection(
     job = await db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # The final inspection is sent to the assigned client — there must be at
+    # least one, or it releases to nobody.
+    if not await job_has_client_access(db, job_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Assign at least one client under the Client Access tab before "
+            "releasing the final inspection.",
+        )
 
     fi = await _get_fi(db, job_id)
 
