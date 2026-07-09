@@ -33,6 +33,7 @@ import {
 } from '../api/client';
 import { fmtDate, fmtDay } from '../components/common';
 import { useAuth } from '../context/AuthContext';
+import { useDeviceType } from '../hooks/useDeviceType';
 import type { Role, User } from '../types';
 
 const ROLES: { value: Role; label: string }[] = [
@@ -49,6 +50,7 @@ const ROLE_COLORS: Record<Role, string> = {
 
 export default function Users() {
   const { user: me } = useAuth();
+  const isMobile = useDeviceType().isMobile;
   const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState('');
   const [dialog, setDialog] = useState<{ open: boolean; editing?: User }>({ open: false });
@@ -130,14 +132,47 @@ export default function Users() {
     }
   };
 
+  const roleChip = (role: Role) => (
+    <Chip
+      label={ROLES.find((r) => r.value === role)?.label || role}
+      size="small"
+      sx={{
+        bgcolor: `${ROLE_COLORS[role]}22`,
+        color: ROLE_COLORS[role],
+        border: `1px solid ${ROLE_COLORS[role]}55`,
+        fontWeight: 600,
+      }}
+    />
+  );
+
+  const statusChip = (active: boolean) => (
+    <Chip
+      label={active ? 'Active' : 'Inactive'}
+      size="small"
+      color={active ? 'success' : 'default'}
+      variant={active ? 'filled' : 'outlined'}
+    />
+  );
+
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-        <Typography variant="h4" fontWeight={800}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        spacing={1.5}
+        sx={{ mb: 3 }}
+      >
+        <Typography variant="h4" fontWeight={800} sx={{ fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
           Users
         </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-          New User
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={openCreate}
+          sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+        >
+          {isMobile ? 'New' : 'New User'}
         </Button>
       </Stack>
 
@@ -147,74 +182,115 @@ export default function Users() {
         </Typography>
       )}
 
-      <Card>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Username</TableCell>
-              <TableCell>Name</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>Role</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Last login</TableCell>
-              <TableCell>Created</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {users.map((u) => (
-              <TableRow key={u.id} hover>
-                <TableCell sx={{ fontWeight: 700 }}>{u.username}</TableCell>
-                <TableCell>{u.full_name || '—'}</TableCell>
-                <TableCell>{u.email || '—'}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={ROLES.find((r) => r.value === u.role)?.label || u.role}
+      {isMobile ? (
+        // Phone / APK: a table this wide would clip off-screen (the main
+        // column hides horizontal overflow), so the Edit/Delete actions become
+        // unreachable. Render one card per user instead, matching the rest of
+        // the app's mobile pattern.
+        <Stack spacing={1.5}>
+          {users.map((u) => (
+            <Card key={u.id} sx={{ p: 1.75 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography fontWeight={800} noWrap>
+                    {u.username}
+                  </Typography>
+                  {u.full_name && (
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {u.full_name}
+                    </Typography>
+                  )}
+                </Box>
+                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                  <IconButton size="small" onClick={() => openEdit(u)}>
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
                     size="small"
-                    sx={{
-                      bgcolor: `${ROLE_COLORS[u.role]}22`,
-                      color: ROLE_COLORS[u.role],
-                      border: `1px solid ${ROLE_COLORS[u.role]}55`,
-                      fontWeight: 600,
-                    }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={u.is_active ? 'Active' : 'Inactive'}
-                    size="small"
-                    color={u.is_active ? 'success' : 'default'}
-                    variant={u.is_active ? 'filled' : 'outlined'}
-                  />
-                </TableCell>
-                <TableCell>{u.last_login_at ? fmtDate(u.last_login_at) : 'Never'}</TableCell>
-                <TableCell>{fmtDay(u.created_at)}</TableCell>
-                <TableCell align="right">
-                  <Tooltip title="Edit">
-                    <IconButton size="small" onClick={() => openEdit(u)}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={u.id === me?.id ? 'Cannot delete yourself' : 'Delete'}>
-                    <span>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        disabled={u.id === me?.id}
-                        onClick={() => remove(u)}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+                    color="error"
+                    disabled={u.id === me?.id}
+                    onClick={() => remove(u)}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+              </Stack>
 
-      <Dialog open={dialog.open} onClose={() => setDialog({ open: false })} fullWidth maxWidth="sm">
+              <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }} useFlexGap>
+                {roleChip(u.role)}
+                {statusChip(u.is_active)}
+              </Stack>
+
+              {u.email && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }} noWrap>
+                  {u.email}
+                </Typography>
+              )}
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                Last login: {u.last_login_at ? fmtDate(u.last_login_at) : 'Never'}
+                {' · '}Created {fmtDay(u.created_at)}
+              </Typography>
+            </Card>
+          ))}
+        </Stack>
+      ) : (
+        <Card>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Username</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Email</TableCell>
+                <TableCell>Role</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Last login</TableCell>
+                <TableCell>Created</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {users.map((u) => (
+                <TableRow key={u.id} hover>
+                  <TableCell sx={{ fontWeight: 700 }}>{u.username}</TableCell>
+                  <TableCell>{u.full_name || '—'}</TableCell>
+                  <TableCell>{u.email || '—'}</TableCell>
+                  <TableCell>{roleChip(u.role)}</TableCell>
+                  <TableCell>{statusChip(u.is_active)}</TableCell>
+                  <TableCell>{u.last_login_at ? fmtDate(u.last_login_at) : 'Never'}</TableCell>
+                  <TableCell>{fmtDay(u.created_at)}</TableCell>
+                  <TableCell align="right">
+                    <Tooltip title="Edit">
+                      <IconButton size="small" onClick={() => openEdit(u)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={u.id === me?.id ? 'Cannot delete yourself' : 'Delete'}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          disabled={u.id === me?.id}
+                          onClick={() => remove(u)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      <Dialog
+        open={dialog.open}
+        onClose={() => setDialog({ open: false })}
+        fullWidth
+        maxWidth="sm"
+        fullScreen={isMobile}
+      >
         <DialogTitle>{dialog.editing ? `Edit ${dialog.editing.username}` : 'New User'}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>

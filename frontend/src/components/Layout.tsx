@@ -307,7 +307,10 @@ export default function Layout() {
               <MenuIcon />
             </IconButton>
           )}
-          <Typography sx={{ fontFamily: fontDisplay, fontWeight: 600, fontSize: 16, letterSpacing: '-0.01em' }}>
+          <Typography
+            noWrap
+            sx={{ fontFamily: fontDisplay, fontWeight: 600, fontSize: 16, letterSpacing: '-0.01em', minWidth: 0 }}
+          >
             {pageTitle}
           </Typography>
           <Box sx={{ flex: 1 }} />
