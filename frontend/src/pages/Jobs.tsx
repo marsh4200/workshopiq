@@ -68,9 +68,19 @@ export default function Jobs() {
   const [statuses, setStatuses] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
   // Which customer folders are open. Keyed by the normalised customer name.
   const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  // Free-text search. Persisted in the URL (like status/view/due) so that
+  // leaving for a job's detail page and coming back — via the browser's own
+  // history — restores exactly what was typed, instead of landing back on an
+  // empty, unfiltered list.
+  const search = params.get('q') || '';
+  const setSearch = (v: string) => {
+    if (v) params.set('q', v);
+    else params.delete('q');
+    setParams(params, { replace: true });
+  };
 
   const statusFilter = params.get('status') || '';
   // Optional due-date lens, set by the dashboard tiles: 'overdue' | 'soon'.

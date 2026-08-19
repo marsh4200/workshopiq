@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import {
   Alert,
@@ -172,7 +172,18 @@ export default function JobDetail() {
   const { id } = useParams();
   const jobId = Number(id);
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+
+  // "Back to Jobs" should return to wherever the user actually came from —
+  // e.g. a customer search or a status/closed filter on the Jobs list — not
+  // reset to the plain, unfiltered /jobs page. `location.key` is 'default'
+  // when this page was opened directly (refresh, deep link, new tab), in
+  // which case there's no in-app history to go back to.
+  const goBackToJobs = () => {
+    if (location.key !== 'default') navigate(-1);
+    else navigate('/jobs');
+  };
   const { isClient, isAdmin } = useAuth();
   const { isMobile } = useDeviceType();
   const readOnly = isClient;
@@ -245,7 +256,7 @@ export default function JobDetail() {
         alignItems="center"
         sx={{ mb: 2 }}
       >
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/jobs')}>
+        <Button startIcon={<ArrowBackIcon />} onClick={goBackToJobs}>
           Back to Jobs
         </Button>
         {isAdmin && (
