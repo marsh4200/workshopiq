@@ -125,24 +125,32 @@ async def seed() -> None:
         # Settings defaults
         await ensure_defaults(db)
 
-        # Inspection templates
-        existing = await db.scalar(
-            select(func.count()).select_from(InspectionTemplate)
+        # Inspection templates. Additive: only creates templates for
+        # component types that don't have one yet, so shipping new entries
+        # in DEFAULT_TEMPLATES (templates_data.py) picks them up on the next
+        # restart of an already-seeded install, without touching any
+        # template a user has already customized.
+        existing_types = set(
+            (await db.execute(select(InspectionTemplate.component_type))).scalars()
         )
-        if not existing:
-            for comp_type, items in DEFAULT_TEMPLATES.items():
-                template = InspectionTemplate(
-                    component_type=comp_type, name=f"{comp_type} Inspection"
-                )
-                db.add(template)
-                await db.flush()
-                for idx, label in enumerate(items):
-                    db.add(
-                        TemplateItem(
-                            template_id=template.id, label=label, order_index=idx
-                        )
+        added = []
+        for comp_type, items in DEFAULT_TEMPLATES.items():
+            if comp_type in existing_types:
+                continue
+            template = InspectionTemplate(
+                component_type=comp_type, name=f"{comp_type} Inspection"
+            )
+            db.add(template)
+            await db.flush()
+            for idx, label in enumerate(items):
+                db.add(
+                    TemplateItem(
+                        template_id=template.id, label=label, order_index=idx
                     )
-            logger.info("Seeded default inspection templates")
+                )
+            added.append(comp_type)
+        if added:
+            logger.info("Seeded default inspection templates: %s", ", ".join(added))
 
         await db.commit()
 
