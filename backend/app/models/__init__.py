@@ -239,6 +239,15 @@ class InspectionReport(Base):
     certificate_number: Mapped[str] = mapped_column(String(60), index=True)
     sequence: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Header fields office staff set when the QR is generated — locked
+    # (read-only) on the public phone form so the person on the floor can see
+    # them but can't accidentally change them. Left blank means "not set at
+    # generation time", in which case the form field is simply blank and
+    # still locked.
+    drawing_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    qcp_no: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    quantity: Mapped[str | None] = mapped_column(String(60), nullable=True)
+
     submitted: Mapped[bool] = mapped_column(Boolean, default=False)
     inspector_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     customer_signed_name: Mapped[str | None] = mapped_column(String(255), nullable=True)

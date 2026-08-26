@@ -87,6 +87,11 @@ COLUMN_STATEMENTS = (
     "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS client_signature_png TEXT",
     "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS client_signed_at TIMESTAMPTZ",
     "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS client_signed_by_id INTEGER REFERENCES users(id)",
+    # Header fields set by staff at generation time and locked (read-only) on
+    # the public phone form.
+    "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS drawing_number VARCHAR(120)",
+    "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS qcp_no VARCHAR(120)",
+    "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS quantity VARCHAR(60)",
 )
 
 # One-off data fixes after the columns exist. Backfill is idempotent (the WHERE

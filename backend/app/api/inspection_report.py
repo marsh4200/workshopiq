@@ -64,17 +64,23 @@ def report_url(request: Request, token: str) -> str:
     return f"{public_base_url(request)}{settings.API_PREFIX}/inspection-report/{token}"
 
 
-def _job_header_defaults(job: Job, cert: str) -> dict:
-    """Pre-fill the report header from the job."""
+def _job_header_defaults(job: Job, cert: str, report: "InspectionReport | None" = None) -> dict:
+    """Pre-fill the report header from the job.
+
+    ``drawing_number``/``qcp_no``/``quantity`` have no job-level source — they
+    are set by staff when the QR is generated (see ``generate_report``) and
+    stored on the report row itself, so we source them from ``report`` when
+    one is supplied. They're locked (read-only) on the public phone form.
+    """
     return {
         "certificate_number": cert,
         "date": _today(),
         "customer": job.customer_name or "",
         "job_no": job.job_number or "",
         "job_desc": (job.description or job.component_type or "")[:255],
-        "drawing_number": "",
-        "qcp_no": "",
-        "quantity": "",
+        "drawing_number": (report.drawing_number if report else "") or "",
+        "qcp_no": (report.qcp_no if report else "") or "",
+        "quantity": (report.quantity if report else "") or "",
         "eve_job": job.eq_number or "",
     }
 
@@ -93,6 +99,9 @@ def _serialize(report: InspectionReport, job: Job | None) -> dict:
         "qc_reject": report.qc_reject,
         "rework": report.rework,
         "document_id": report.document_id,
+        "drawing_number": report.drawing_number,
+        "qcp_no": report.qcp_no,
+        "quantity": report.quantity,
         "client_signed": report.client_signed,
         "client_signed_name": report.client_signed_name,
         "client_signed_at": report.client_signed_at.isoformat() if report.client_signed_at else None,
@@ -148,6 +157,9 @@ async def generate_report(
         certificate_number=cert,
         sequence=seq,
         created_by_id=user.id,
+        drawing_number=(str(body.get("drawing_number") or "").strip()[:120] or None),
+        qcp_no=(str(body.get("qcp_no") or "").strip()[:120] or None),
+        quantity=(str(body.get("quantity") or "").strip()[:60] or None),
     )
     db.add(report)
     db.add(
@@ -415,7 +427,7 @@ def _hv(value: str) -> str:
 
 
 def _ta(name: str = "", value: str = "", *, data_k: str = "", css: str = "",
-        placeholder: str = "", extra: str = "") -> str:
+        placeholder: str = "", extra: str = "", readonly: bool = False) -> str:
     """Auto-growing single-row textarea, used instead of a plain text
     ``<input>`` for every free-text field on the form (not just DESCRIPTION):
     any of these can end up with more than a short word or two in it — a
@@ -424,6 +436,11 @@ def _ta(name: str = "", value: str = "", *, data_k: str = "", css: str = "",
     whatever's typed (see the autoGrow() delegation in the page script),
     and behaves exactly like a normal single-line box until content
     actually needs the extra room.
+
+    ``readonly=True`` locks the field: the value still shows (and still
+    submits with the form, unlike ``disabled``) but the person filling it in
+    on their phone can't change it — used for header fields set by staff
+    when the QR was generated, and for the on-site Customer sign-off block.
     """
     attrs = ['data-autogrow', 'rows="1"']
     if name:
@@ -434,6 +451,8 @@ def _ta(name: str = "", value: str = "", *, data_k: str = "", css: str = "",
         attrs.append(f'class="{css}"')
     if placeholder:
         attrs.append(f'placeholder="{_hv(placeholder)}"')
+    if readonly:
+        attrs.append('readonly tabindex="-1" aria-readonly="true"')
     if extra:
         attrs.append(extra)
     return f'<textarea {" ".join(attrs)}>{_hv(value)}</textarea>'
@@ -532,7 +551,9 @@ def _form_html(token: str, job: Job, h: dict) -> str:
   .grid input, .grid textarea {{ width:100%; border:0; background:transparent; padding:9px 8px;
     font:inherit; font-size:14px; }}
   .grid input:focus, .grid textarea:focus {{ outline:none; background:#eef4ff; }}
-  .grid input[readonly] {{ background:#f7f7f7; font-weight:700; }}
+  .grid input[readonly], .grid textarea[readonly],
+  .grid input[readonly]:focus, .grid textarea[readonly]:focus {{
+    background:#f7f7f7; font-weight:700; color:#333; cursor:default; }}
   .grid textarea {{ resize:none; overflow:hidden; display:block; line-height:1.3; }}
 
   .hscroll {{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:12px; }}
@@ -576,6 +597,9 @@ def _form_html(token: str, job: Job, h: dict) -> str:
     background:transparent; padding:9px 8px; font:inherit; font-size:14px; }}
   table.sign input:focus, table.sign textarea:focus, table.sign select.cellsel:focus {{
     outline:none; background:#eef4ff; }}
+  table.sign input[readonly], table.sign textarea[readonly],
+  table.sign input[readonly]:focus, table.sign textarea[readonly]:focus {{
+    background:#f7f7f7; font-weight:700; color:#333; cursor:default; font-style:normal; }}
   table.sign textarea {{ resize:none; overflow:hidden; display:block; line-height:1.3; }}
   .sig input, .sig textarea {{ font-style:italic; color:#1f3fae; font-size:16px; }}
 
@@ -679,29 +703,29 @@ def _form_html(token: str, job: Job, h: dict) -> str:
         <td class="lbl">CERTIFICATE NUMBER</td>
         <td><input name="certificate_number" value="{_hv(h['certificate_number'])}" readonly/></td>
         <td class="lbl">DATE</td>
-        <td>{_ta("date", h['date'])}</td>
+        <td>{_ta("date", h['date'], readonly=True)}</td>
       </tr>
       <tr>
         <td class="lbl">CUSTOMER</td>
-        <td>{_ta("customer", h['customer'])}</td>
+        <td>{_ta("customer", h['customer'], readonly=True)}</td>
         <td class="lbl">JOB NO</td>
-        <td>{_ta("job_no", h['job_no'])}</td>
+        <td>{_ta("job_no", h['job_no'], readonly=True)}</td>
       </tr>
       <tr>
         <td class="lbl">JOB DESC</td>
-        <td>{_ta("job_desc", h['job_desc'])}</td>
+        <td>{_ta("job_desc", h['job_desc'], readonly=True)}</td>
         <td class="lbl">QCP NO</td>
-        <td>{_ta("qcp_no", h['qcp_no'])}</td>
+        <td>{_ta("qcp_no", h['qcp_no'], readonly=True)}</td>
       </tr>
       <tr>
         <td class="lbl">DRAWING NUMBER</td>
-        <td>{_ta("drawing_number", h['drawing_number'])}</td>
+        <td>{_ta("drawing_number", h['drawing_number'], readonly=True)}</td>
         <td class="lbl">EVE JOB</td>
-        <td>{_ta("eve_job", h['eve_job'])}</td>
+        <td>{_ta("eve_job", h['eve_job'], readonly=True)}</td>
       </tr>
       <tr>
         <td class="lbl">QUANTITY</td>
-        <td>{_ta("quantity", h['quantity'])}</td>
+        <td>{_ta("quantity", h['quantity'], readonly=True)}</td>
         <td class="lbl"></td>
         <td><input disabled/></td>
       </tr>
@@ -744,15 +768,15 @@ def _form_html(token: str, job: Job, h: dict) -> str:
       <tr><th>INSPECTION EVERTON</th><th>CUSTOMER</th></tr>
       <tr>
         <td><table><tr><td class="lbl">NAME <span class="reqd">*</span></td><td>{_inspector_select("inspector_name")}</td></tr></table></td>
-        <td><table><tr><td class="lbl">NAME</td><td>{_ta("customer_signed_name")}</td></tr></table></td>
+        <td><table><tr><td class="lbl">NAME</td><td>{_ta("customer_signed_name", readonly=True)}</td></tr></table></td>
       </tr>
       <tr>
         <td><table><tr><td class="lbl">DATE</td><td>{_ta("inspector_date", h['date'])}</td></tr></table></td>
-        <td><table><tr><td class="lbl">DATE</td><td>{_ta("customer_date")}</td></tr></table></td>
+        <td><table><tr><td class="lbl">DATE</td><td>{_ta("customer_date", readonly=True)}</td></tr></table></td>
       </tr>
       <tr>
         <td class="sig"><table><tr><td class="lbl">SIGNATURE</td><td>{_ta("inspector_sign", placeholder="Type name")}</td></tr></table></td>
-        <td class="sig"><table><tr><td class="lbl">SIGNATURE</td><td>{_ta("customer_sign", placeholder="Type name")}</td></tr></table></td>
+        <td class="sig"><table><tr><td class="lbl">SIGNATURE</td><td>{_ta("customer_sign", readonly=True)}</td></tr></table></td>
       </tr>
     </table>
   </div>
@@ -847,7 +871,7 @@ async def report_form(token: str, db: AsyncSession = Depends(get_db)):
     if report.submitted:
         return HTMLResponse(_already_page(job, report))
 
-    h = _job_header_defaults(job, report.certificate_number)
+    h = _job_header_defaults(job, report.certificate_number, report)
     return HTMLResponse(_form_html(token, job, h))
 
 

@@ -390,6 +390,9 @@ export interface InspectionReportItem {
   qc_reject?: string | null;
   rework?: string | null;
   document_id?: number | null;
+  drawing_number?: string | null;
+  qcp_no?: string | null;
+  quantity?: string | null;
   client_signed?: boolean;
   client_signed_name?: string | null;
   client_signed_at?: string | null;

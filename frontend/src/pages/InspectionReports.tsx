@@ -99,6 +99,9 @@ export default function InspectionReports() {
   const [loading, setLoading] = useState(true);
   const [genOpen, setGenOpen] = useState(false);
   const [job, setJob] = useState<JobListItem | null>(null);
+  const [genDrawingNumber, setGenDrawingNumber] = useState('');
+  const [genQcpNo, setGenQcpNo] = useState('');
+  const [genQuantity, setGenQuantity] = useState('');
   const [generating, setGenerating] = useState(false);
   const [qr, setQr] = useState<InspectionReportDetail | null>(null);
   const [toast, setToast] = useState('');
@@ -123,10 +126,17 @@ export default function InspectionReports() {
     if (!job) return;
     setGenerating(true);
     try {
-      const detail = await generateInspectionReport(job.id);
+      const detail = await generateInspectionReport(job.id, {
+        drawing_number: genDrawingNumber.trim() || undefined,
+        qcp_no: genQcpNo.trim() || undefined,
+        quantity: genQuantity.trim() || undefined,
+      });
       setQr(detail);
       setGenOpen(false);
       setJob(null);
+      setGenDrawingNumber('');
+      setGenQcpNo('');
+      setGenQuantity('');
       await load();
     } catch (e) {
       setToast(apiError(e, 'Could not generate report'));
@@ -433,6 +443,30 @@ export default function InspectionReports() {
             isOptionEqualToValue={(a, b) => a.id === b.id}
             renderInput={(params) => <TextField {...params} label="Job" autoFocus />}
           />
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2.5, mb: 1 }}>
+            Optional — shown on the form but locked, so the person filling it in on site
+            can't accidentally change them.
+          </Typography>
+          <Stack spacing={2}>
+            <TextField
+              label="Drawing number"
+              value={genDrawingNumber}
+              onChange={(e) => setGenDrawingNumber(e.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="QCP no"
+              value={genQcpNo}
+              onChange={(e) => setGenQcpNo(e.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="Quantity"
+              value={genQuantity}
+              onChange={(e) => setGenQuantity(e.target.value)}
+              fullWidth
+            />
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setGenOpen(false)}>Cancel</Button>

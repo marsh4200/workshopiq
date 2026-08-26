@@ -424,8 +424,16 @@ export default api;
 export const listInspectionReports = async () =>
   (await api.get<InspectionReportItem[]>('/inspection-reports')).data;
 
-export const generateInspectionReport = async (job_id: number) =>
-  (await api.post<InspectionReportDetail>('/inspection-reports/generate', { job_id })).data;
+export const generateInspectionReport = async (
+  job_id: number,
+  opts?: { drawing_number?: string; qcp_no?: string; quantity?: string },
+) =>
+  (
+    await api.post<InspectionReportDetail>('/inspection-reports/generate', {
+      job_id,
+      ...opts,
+    })
+  ).data;
 
 export const getInspectionReport = async (id: number) =>
   (await api.get<InspectionReportDetail>(`/inspection-reports/${id}`)).data;
