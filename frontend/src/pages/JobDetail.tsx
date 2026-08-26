@@ -40,6 +40,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import DownloadIcon from '@mui/icons-material/Download';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -87,6 +88,7 @@ import {
   rejectClosure,
   logWhatsapp,
   downloadCertificate,
+  downloadJobPack,
   apiError,
 } from '../api/client';
 import { StatusBadge, StatusBanner, ClosedBanner, ResultBadge, fmtDate, fmtDay, dueInfo, EmptyState, SectionHeader } from '../components/common';
@@ -460,6 +462,19 @@ function OverviewTab({
     }
   };
 
+  const jobFinished = ['Completed', 'Awaiting Customer Review', 'Closed'].includes(job.status);
+  const [packBusy, setPackBusy] = useState(false);
+  const handlePack = async () => {
+    setPackBusy(true);
+    try {
+      await downloadJobPack(job.id, job.job_number);
+    } catch (e) {
+      setError(apiError(e, 'Failed to build the job pack'));
+    } finally {
+      setPackBusy(false);
+    }
+  };
+
   const saveDetails = async () => {
     setSaving(true);
     try {
@@ -674,6 +689,24 @@ function OverviewTab({
                 ? 'Download Certificate'
                 : 'Download Job Report'}
             </Button>
+            {jobFinished && (
+              <Button
+                fullWidth
+                variant="contained"
+                startIcon={<Inventory2OutlinedIcon />}
+                onClick={handlePack}
+                disabled={packBusy}
+                sx={{
+                  mb: 2,
+                  background: 'linear-gradient(135deg, #22c55e, #0ea5e9)',
+                  color: '#04150c',
+                  fontWeight: 700,
+                  '&:hover': { background: 'linear-gradient(135deg, #16a34a, #0284c7)' },
+                }}
+              >
+                {packBusy ? 'Packing…' : 'Download Job Pack (.zip)'}
+              </Button>
+            )}
             <Stack spacing={0.25}>
               <Stat icon={<FactCheckOutlinedIcon />} label="Inspections" value={job.inspections.length} />
               <Stat icon={<PhotoLibraryOutlinedIcon />} label="Photos" value={job.photos.length} />

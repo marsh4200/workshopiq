@@ -47,6 +47,7 @@ from app.schemas import (
 )
 from app.services import file_service
 from app.services.certificate_service import build_job_certificate
+from app.services.job_pack_service import build_job_pack_zip
 from app.services.settings_service import get_setting, next_job_number
 from app.services.templates_data import JOB_STATUSES
 
@@ -579,6 +580,59 @@ async def job_certificate(
     return Response(
         content=pdf,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------- Job pack (ZIP: cover doc + all photos + all documents) ----------------
+@router.get("/{job_id}/pack")
+async def job_pack(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Everything filed on this job, bundled into one ZIP.
+
+    Contains the same branded cover PDF as ``/jobs/{id}/certificate``, plus
+    every photo (grouped Before / After / General) and every document that
+    has been uploaded or filed against the job — the complete record handed
+    to the client once their job is done. Same access rule as the
+    certificate: clients can pull it for any job they have access to,
+    staff/admin for any job.
+    """
+    result = await db.execute(
+        select(Job)
+        .options(
+            selectinload(Job.inspections).selectinload(Inspection.items),
+            selectinload(Job.final_inspection).selectinload(
+                FinalInspection.attempts_log
+            ),
+            selectinload(Job.ncrs),
+            selectinload(Job.photos),
+            selectinload(Job.documents),
+        )
+        .where(Job.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    await assert_can_view(db, job, user)
+
+    company = await get_setting(db, "company_name") or "WorkshopIQ"
+    logo_path = None
+    logo_name = await get_setting(db, "company_logo")
+    if logo_name:
+        candidate = file_service.file_path(logo_name)
+        if candidate.exists():
+            logo_path = candidate
+
+    zip_bytes = build_job_pack_zip(job, company, logo_path)
+
+    safe_no = job.job_number.replace("/", "-").replace(" ", "_")
+    filename = f"{safe_no}_JobPack.zip"
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

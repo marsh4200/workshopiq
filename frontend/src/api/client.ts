@@ -210,6 +210,21 @@ export const downloadCertificate = async (jobId: number, jobNumber: string, pass
   URL.revokeObjectURL(url);
 };
 
+// Complete "job pack" ZIP — cover certificate/report + every photo and
+// document filed on the job. Same access rule as the certificate above.
+export const downloadJobPack = async (jobId: number, jobNumber: string) => {
+  const res = await api.get(`/jobs/${jobId}/pack`, { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  const safe = jobNumber.replace(/[/ ]/g, '_');
+  a.download = `${safe}_JobPack.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
 // Inspections
 export const createInspection = async (jobId: number, component_type: string, title?: string) =>
   (await api.post<Inspection>(`/jobs/${jobId}/inspections`, { component_type, title })).data;

@@ -16,8 +16,10 @@ import {
   Snackbar,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -27,23 +29,27 @@ import StarBorderIcon from '@mui/icons-material/StarBorderPurple500';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import WorkIcon from '@mui/icons-material/Engineering';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForwardIos';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import PrecisionManufacturingOutlinedIcon from '@mui/icons-material/PrecisionManufacturingOutlined';
 import { useNavigate } from 'react-router-dom';
 import {
   apiError,
+  downloadJobPack,
   getPendingReviews,
   listJobs,
   listMyInspectionReports,
   signInspectionReport,
 } from '../api/client';
-import { EmptyState, PageHeader, StatusBadge, fmtDay } from '../components/common';
+import { EmptyState, STATUS_COLORS, StatusBadge, fmtDay } from '../components/common';
 import SignaturePad from '../components/SignaturePad';
 import ReviewDialog from '../components/ReviewDialog';
 import { useAuth } from '../context/AuthContext';
-import { fontMono } from '../theme/theme';
+import { fontDisplay, fontMono } from '../theme/theme';
 import type { InspectionReportItem, JobListItem, PendingReview } from '../types';
 
 const SIGN_COLOR = '#f59e0b';
 const REVIEW_COLOR = '#3b82f6';
+const FINISHED_STATUSES = new Set(['Completed', 'Awaiting Customer Review', 'Closed']);
 
 /** One-line human description of a job from the list payload we already have. */
 function jobBlurb(j: JobListItem): string {
@@ -54,12 +60,137 @@ function jobBlurb(j: JobListItem): string {
   return bits.join(' · ') || 'Workshop job';
 }
 
+/** The pipeline stages shown on the progress rail (a failed/awaiting-review
+ * job still maps onto one of these so every job reads on the same scale). */
+const STAGES = ['Received', 'Machining', 'Inspection', 'Completed', 'Closed'];
+
+function stageIndex(status: string): number {
+  switch (status) {
+    case 'Received':
+      return 0;
+    case 'Machining':
+      return 1;
+    case 'Inspection':
+    case 'Inspection Failed':
+      return 2;
+    case 'Completed':
+    case 'Awaiting Customer Review':
+      return 3;
+    case 'Closed':
+      return 4;
+    default:
+      return 0;
+  }
+}
+
+/** Slim animated progress rail — dots for each pipeline stage, filled in up
+ * to the job's current position. A quick, glanceable "how far along is this"
+ * without needing to open the job. */
+function JobStageRail({ status }: { status: string }) {
+  const idx = stageIndex(status);
+  const failed = status === 'Inspection Failed';
+  const color = STATUS_COLORS[status] || '#94a3b8';
+  return (
+    <Stack direction="row" alignItems="center" sx={{ width: '100%', py: 0.25 }}>
+      {STAGES.map((label, i) => {
+        const done = i < idx;
+        const current = i === idx;
+        const isFailNode = current && failed;
+        const dotColor = isFailNode ? '#f43f5e' : done ? '#22c55e' : current ? color : undefined;
+        return (
+          <Box key={label} sx={{ display: 'flex', alignItems: 'center', flex: i < STAGES.length - 1 ? 1 : '0 0 auto' }}>
+            <Tooltip title={isFailNode ? 'Inspection failed — rework in progress' : label} arrow>
+              <Box
+                sx={{
+                  width: current ? 12 : 8,
+                  height: current ? 12 : 8,
+                  borderRadius: '50%',
+                  flexShrink: 0,
+                  bgcolor: dotColor || 'action.disabledBackground',
+                  boxShadow: current ? `0 0 0 4px ${alpha(dotColor || color, 0.22)}` : 'none',
+                  transition: 'all .25s ease',
+                }}
+              />
+            </Tooltip>
+            {i < STAGES.length - 1 && (
+              <Box
+                sx={{
+                  flex: 1,
+                  height: 3,
+                  mx: 0.5,
+                  borderRadius: 2,
+                  bgcolor: i < idx ? alpha('#22c55e', 0.55) : 'divider',
+                  transition: 'all .3s ease',
+                }}
+              />
+            )}
+          </Box>
+        );
+      })}
+    </Stack>
+  );
+}
+
+/** Ring progress used in the hero — how many of the client's jobs are done. */
+function ProgressRing({
+  percent,
+  size = 108,
+  stroke = 10,
+  value,
+  label,
+}: {
+  percent: number;
+  size?: number;
+  stroke?: number;
+  value: string;
+  label: string;
+}) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c - (Math.max(0, Math.min(100, percent)) / 100) * c;
+  return (
+    <Box sx={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', display: 'block' }}>
+        <defs>
+          <linearGradient id="clientHomeRingGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#3b82f6" />
+            <stop offset="100%" stopColor="#22d3ee" />
+          </linearGradient>
+        </defs>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeOpacity={0.12} strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="url(#clientHomeRingGrad)"
+          strokeWidth={stroke}
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)' }}
+        />
+      </svg>
+      <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center', px: 1 }}>
+        <Box>
+          <Typography sx={{ fontFamily: fontDisplay, fontWeight: 800, fontSize: '1.5rem', lineHeight: 1 }}>
+            {value}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.1, display: 'block', mt: 0.25 }}>
+            {label}
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
 /**
  * Client landing page. Built around two questions the client actually has:
  * "what needs me?" (sign a report, leave a review) and "how's my job going?".
- * The first is answered by the summary cards up top; the second by the job
- * folders below — collapsed by default, each opening to that job's reports,
- * review action and a link into the full job.
+ * The hero up top answers both at a glance — an overall completion ring plus
+ * the two action tiles — and the job cards below carry a live pipeline rail
+ * and, once a job is finished, a one-tap download of everything filed on it.
  */
 export default function ClientHome() {
   const { user } = useAuth();
@@ -71,6 +202,7 @@ export default function ClientHome() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Set<number>>(new Set());
   const [toast, setToast] = useState('');
+  const [packBusy, setPackBusy] = useState<number | null>(null);
 
   // Sign dialog
   const [signTarget, setSignTarget] = useState<InspectionReportItem | null>(null);
@@ -136,6 +268,12 @@ export default function ClientHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, reportsByJob, reviewByJob]);
 
+  const doneCount = useMemo(
+    () => jobs.filter((j) => FINISHED_STATUSES.has(j.status)).length,
+    [jobs],
+  );
+  const donePercent = jobs.length ? Math.round((doneCount / jobs.length) * 100) : 0;
+
   const toggle = (id: number) =>
     setOpen((prev) => {
       const next = new Set(prev);
@@ -170,6 +308,17 @@ export default function ClientHome() {
     }
   };
 
+  const handlePack = async (job: JobListItem) => {
+    setPackBusy(job.id);
+    try {
+      await downloadJobPack(job.id, job.job_number);
+    } catch (e) {
+      setToast(apiError(e, 'Could not download the job pack'));
+    } finally {
+      setPackBusy(null);
+    }
+  };
+
   const firstName = (user?.full_name || user?.username || '').split(' ')[0];
 
   if (loading)
@@ -196,17 +345,18 @@ export default function ClientHome() {
     caption: string;
     to: string;
   }) => {
-    const active = count > 0;
+    const isActive = count > 0;
     return (
       <Card
         sx={{
-          bgcolor: active ? `${color}14` : 'transparent',
-          borderColor: active ? `${color}55` : undefined,
-          '&:hover': { borderColor: `${color}66` },
+          bgcolor: isActive ? alpha(color, 0.08) : alpha('#ffffff', 0.02),
+          borderColor: isActive ? alpha(color, 0.35) : undefined,
+          height: '100%',
+          '&:hover': { borderColor: alpha(color, 0.5) },
         }}
       >
-        <CardActionArea onClick={() => navigate(to)} sx={{ borderRadius: 'inherit' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 2 }}>
+        <CardActionArea onClick={() => navigate(to)} sx={{ borderRadius: 'inherit', height: '100%' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 2, height: '100%' }}>
             <Box
               sx={{
                 width: 44,
@@ -215,19 +365,19 @@ export default function ClientHome() {
                 display: 'grid',
                 placeItems: 'center',
                 flexShrink: 0,
-                color: active ? color : 'text.disabled',
-                bgcolor: active ? `${color}1f` : 'action.hover',
+                color: isActive ? color : 'text.disabled',
+                bgcolor: isActive ? alpha(color, 0.16) : 'action.hover',
                 '& svg': { fontSize: 24 },
               }}
             >
-              {active ? icon : <CheckCircleOutlineIcon />}
+              {isActive ? icon : <CheckCircleOutlineIcon />}
             </Box>
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                {active ? `${count} ${label}` : `No ${label}`}
+                {isActive ? `${count} ${label}` : `No ${label}`}
               </Typography>
               <Typography variant="body2" color="text.secondary" noWrap>
-                {active ? caption : "You're all caught up"}
+                {isActive ? caption : "You're all caught up"}
               </Typography>
             </Box>
             <ArrowForwardIcon sx={{ fontSize: 16, color: 'text.disabled', flexShrink: 0 }} />
@@ -243,6 +393,9 @@ export default function ClientHome() {
     const needsSign = jobHasSign(job.id);
     const needsReview = jobHasReview(job.id);
     const review = reviewByJob.get(job.id);
+    const finished = FINISHED_STATUSES.has(job.status);
+    const color = STATUS_COLORS[job.status] || '#94a3b8';
+    const busy = packBusy === job.id;
 
     return (
       <Card
@@ -250,12 +403,19 @@ export default function ClientHome() {
         sx={{
           overflow: 'hidden',
           borderColor: needsSign
-            ? `${SIGN_COLOR}66`
+            ? alpha(SIGN_COLOR, 0.4)
             : needsReview
-              ? `${REVIEW_COLOR}66`
+              ? alpha(REVIEW_COLOR, 0.4)
               : undefined,
+          transition: 'transform .18s ease, box-shadow .18s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: `0 14px 30px -20px ${alpha(color, 0.6)}`,
+          },
         }}
       >
+        <Box sx={{ height: 3, background: `linear-gradient(90deg, ${color}, ${alpha(color, 0.25)})` }} />
+
         <Box
           onClick={() => toggle(job.id)}
           sx={{
@@ -268,8 +428,20 @@ export default function ClientHome() {
             '&:hover': { bgcolor: 'action.hover' },
           }}
         >
-          <Box sx={{ color: isOpen ? 'primary.main' : 'text.secondary', display: 'grid', placeItems: 'center' }}>
-            {isOpen ? <FolderOpenOutlinedIcon /> : <FolderOutlinedIcon />}
+          <Box
+            sx={{
+              width: 38,
+              height: 38,
+              borderRadius: 2,
+              display: 'grid',
+              placeItems: 'center',
+              flexShrink: 0,
+              color,
+              bgcolor: alpha(color, 0.14),
+              '& svg': { fontSize: 20 },
+            }}
+          >
+            {isOpen ? <FolderOpenOutlinedIcon /> : <PrecisionManufacturingOutlinedIcon />}
           </Box>
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
@@ -280,14 +452,14 @@ export default function ClientHome() {
                 <Chip
                   size="small"
                   label="Sign"
-                  sx={{ height: 20, bgcolor: `${SIGN_COLOR}1f`, color: SIGN_COLOR, fontWeight: 700 }}
+                  sx={{ height: 20, bgcolor: alpha(SIGN_COLOR, 0.14), color: SIGN_COLOR, fontWeight: 700 }}
                 />
               )}
               {needsReview && (
                 <Chip
                   size="small"
                   label="Review"
-                  sx={{ height: 20, bgcolor: `${REVIEW_COLOR}1f`, color: REVIEW_COLOR, fontWeight: 700 }}
+                  sx={{ height: 20, bgcolor: alpha(REVIEW_COLOR, 0.14), color: REVIEW_COLOR, fontWeight: 700 }}
                 />
               )}
             </Stack>
@@ -298,25 +470,57 @@ export default function ClientHome() {
           <Box sx={{ display: { xs: 'none', md: 'block' } }}>
             <StatusBadge status={job.status} />
           </Box>
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<WorkIcon />}
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/jobs/${job.id}`);
-            }}
-            sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
-          >
-            Open job
-          </Button>
+          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+            {finished && (
+              <Tooltip title="Download everything filed on this job — report, photos and documents">
+                <span>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<Inventory2OutlinedIcon />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePack(job);
+                    }}
+                    disabled={busy}
+                    sx={{
+                      whiteSpace: 'nowrap',
+                      background: 'linear-gradient(135deg, #22c55e, #0ea5e9)',
+                      color: '#04150c',
+                      fontWeight: 700,
+                      '&:hover': { background: 'linear-gradient(135deg, #16a34a, #0284c7)' },
+                    }}
+                  >
+                    {busy ? 'Packing…' : 'Job Pack'}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<WorkIcon />}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/jobs/${job.id}`);
+              }}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              Open
+            </Button>
+          </Stack>
           <ExpandMoreIcon
             sx={{
               color: 'text.secondary',
               transition: 'transform 0.2s',
               transform: isOpen ? 'rotate(180deg)' : 'none',
+              display: { xs: 'none', sm: 'block' },
             }}
           />
+        </Box>
+
+        <Box sx={{ px: 2, pb: 1.25 }}>
+          <JobStageRail status={job.status} />
         </Box>
 
         <Collapse in={isOpen} unmountOnExit>
@@ -412,38 +616,92 @@ export default function ClientHome() {
 
   return (
     <Box>
-      <PageHeader
-        eyebrow="Your workshop"
-        title={`Welcome back${firstName ? `, ${firstName}` : ''}`}
-        subtitle={
-          totalAction > 0
-            ? `You have ${totalAction} thing${totalAction === 1 ? '' : 's'} waiting for you.`
-            : 'Everything is up to date. Browse your jobs below.'
-        }
-      />
+      {/* Hero */}
+      <Box
+        sx={{
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: 4,
+          border: '1px solid',
+          borderColor: 'divider',
+          p: { xs: 2.5, sm: 3.5 },
+          mb: 3,
+          background: (t) =>
+            t.palette.mode === 'dark'
+              ? 'linear-gradient(135deg, rgba(37,99,235,0.16), rgba(34,211,238,0.05) 55%, transparent)'
+              : 'linear-gradient(135deg, rgba(37,99,235,0.10), rgba(34,211,238,0.04) 55%, transparent)',
+        }}
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            width: 320,
+            height: 320,
+            borderRadius: '50%',
+            top: -160,
+            right: -120,
+            background: 'radial-gradient(circle, rgba(59,130,246,0.22), transparent 70%)',
+            pointerEvents: 'none',
+          }}
+        />
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={{ xs: 3, md: 4 }}
+          alignItems={{ md: 'center' }}
+          justifyContent="space-between"
+          sx={{ position: 'relative' }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="overline" sx={{ color: 'primary.main' }}>
+              Your workshop
+            </Typography>
+            <Typography
+              sx={{
+                fontFamily: fontDisplay,
+                fontWeight: 800,
+                fontSize: { xs: '1.75rem', sm: '2.25rem' },
+                lineHeight: 1.1,
+              }}
+            >
+              Welcome back{firstName ? `, ${firstName}` : ''}
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 480 }}>
+              {totalAction > 0
+                ? `You have ${totalAction} thing${totalAction === 1 ? '' : 's'} waiting for you.`
+                : 'Everything is up to date. Browse your jobs below.'}
+            </Typography>
+          </Box>
 
-      <Grid container spacing={2} sx={{ mb: 1 }}>
-        <Grid item xs={12} sm={6}>
-          <NeedsCard
-            color={SIGN_COLOR}
-            icon={<BorderColorOutlinedIcon />}
-            count={signCount}
-            label={signCount === 1 ? 'report to sign' : 'reports to sign'}
-            caption="Tap to review and sign"
-            to="/inspection-reports"
-          />
+          {jobs.length > 0 && (
+            <Box sx={{ flexShrink: 0, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
+              <ProgressRing percent={donePercent} value={`${doneCount}/${jobs.length}`} label="jobs finished" />
+            </Box>
+          )}
+        </Stack>
+
+        <Grid container spacing={2} sx={{ mt: { xs: 0.5, sm: 1 }, position: 'relative' }}>
+          <Grid item xs={12} sm={6}>
+            <NeedsCard
+              color={SIGN_COLOR}
+              icon={<BorderColorOutlinedIcon />}
+              count={signCount}
+              label={signCount === 1 ? 'report to sign' : 'reports to sign'}
+              caption="Tap to review and sign"
+              to="/inspection-reports"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <NeedsCard
+              color={REVIEW_COLOR}
+              icon={<StarBorderIcon />}
+              count={reviewCount}
+              label={reviewCount === 1 ? 'job to review' : 'jobs to review'}
+              caption="Tap to rate your finished jobs"
+              to="/reviews"
+            />
+          </Grid>
         </Grid>
-        <Grid item xs={12} sm={6}>
-          <NeedsCard
-            color={REVIEW_COLOR}
-            icon={<StarBorderIcon />}
-            count={reviewCount}
-            label={reviewCount === 1 ? 'job to review' : 'jobs to review'}
-            caption="Tap to rate your finished jobs"
-            to="/reviews"
-          />
-        </Grid>
-      </Grid>
+      </Box>
 
       {jobs.length === 0 ? (
         <Card sx={{ p: 2, mt: 2 }}>
