@@ -28,6 +28,7 @@ import { StatusBadge, STATUS_COLORS, fmtDay, fmtDate, EmptyState } from '../comp
 import { useSettings } from '../context/SettingsContext';
 import { useDeviceType } from '../hooks/useDeviceType';
 import PersonSearchIcon from '@mui/icons-material/PersonSearchOutlined';
+import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import { Autocomplete } from '@mui/material';
 import type { JobReportResponse, JobListItem, JobDetail, Customer } from '../types';
 
@@ -333,6 +334,16 @@ function CustomerReport() {
         <Typography color="error" sx={{ mb: 2 }}>
           {error}
         </Typography>
+      )}
+
+      {!report && !loading && !error && (
+        <Card>
+          <EmptyState
+            icon={<PersonSearchIcon sx={{ fontSize: 40 }} />}
+            title="Pick a customer to report on"
+            subtitle="Choose a customer above and generate a report covering all of their jobs."
+          />
+        </Card>
       )}
 
       {report && (
@@ -687,6 +698,16 @@ function PeriodReports() {
         <Typography color="error" sx={{ mb: 2 }}>
           {error}
         </Typography>
+      )}
+
+      {!report && !loading && !error && (
+        <Card>
+          <EmptyState
+            icon={<SummarizeIcon sx={{ fontSize: 40 }} />}
+            title="No report generated yet"
+            subtitle="Pick a period above and generate a summary of jobs completed in that window."
+          />
+        </Card>
       )}
 
       {/* Results */}
@@ -1140,6 +1161,16 @@ function IndividualReport() {
             Loading job…
           </Typography>
         </Stack>
+      )}
+
+      {!detail && !loadingDetail && !error && (
+        <Card>
+          <EmptyState
+            icon={<AssignmentOutlinedIcon sx={{ fontSize: 40 }} />}
+            title="No job selected"
+            subtitle="Choose a customer and job above to see its full report."
+          />
+        </Card>
       )}
 
       {detail && !loadingDetail && (

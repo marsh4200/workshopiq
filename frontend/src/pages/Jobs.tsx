@@ -29,7 +29,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import { listJobs, fetchMeta, apiError } from '../api/client';
-import { StatusBadge, fmtDay, dueInfo, EmptyState } from '../components/common';
+import { StatusBadge, STATUS_COLORS, fmtDay, dueInfo, EmptyState } from '../components/common';
 import { useAuth } from '../context/AuthContext';
 import { useDeviceType } from '../hooks/useDeviceType';
 import type { JobListItem } from '../types';
@@ -465,12 +465,45 @@ export default function Jobs() {
                     '&:hover': searching ? {} : { bgcolor: 'action.hover' },
                   }}
                 >
-                  <Box sx={{ color: 'primary.main', display: 'flex' }}>
-                    {expanded ? <FolderOpenOutlinedIcon /> : <FolderOutlinedIcon />}
+                  <Box
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: '9px',
+                      display: 'grid',
+                      placeItems: 'center',
+                      flexShrink: 0,
+                      color: 'primary.main',
+                      bgcolor: (t) => `${t.palette.primary.main}1c`,
+                    }}
+                  >
+                    {expanded ? (
+                      <FolderOpenOutlinedIcon sx={{ fontSize: 19 }} />
+                    ) : (
+                      <FolderOutlinedIcon sx={{ fontSize: 19 }} />
+                    )}
                   </Box>
                   <Typography fontWeight={800} sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
                     {g.name}
                   </Typography>
+                  {!searching && (
+                    <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 0.5, flexShrink: 0 }}>
+                      {Array.from(new Set(g.jobs.map((j) => j.status)))
+                        .slice(0, 6)
+                        .map((status) => (
+                          <Box
+                            key={status}
+                            title={status}
+                            sx={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: '50%',
+                              bgcolor: STATUS_COLORS[status] || '#94a3b8',
+                            }}
+                          />
+                        ))}
+                    </Box>
+                  )}
                   <Chip label={g.jobs.length} size="small" sx={{ fontWeight: 700 }} />
                   <ExpandMoreIcon
                     sx={{

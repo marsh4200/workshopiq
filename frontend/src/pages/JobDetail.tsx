@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import {
@@ -47,6 +47,12 @@ import PrintIcon from '@mui/icons-material/Print';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import StarBorderPurple500Icon from '@mui/icons-material/StarBorderPurple500';
+import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
+import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import PhotoLibraryOutlinedIcon from '@mui/icons-material/PhotoLibraryOutlined';
+import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
+import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import {
   getJob,
   updateJob,
@@ -83,7 +89,7 @@ import {
   downloadCertificate,
   apiError,
 } from '../api/client';
-import { StatusBadge, StatusBanner, ClosedBanner, ResultBadge, fmtDate, fmtDay, dueInfo, EmptyState } from '../components/common';
+import { StatusBadge, StatusBanner, ClosedBanner, ResultBadge, fmtDate, fmtDay, dueInfo, EmptyState, SectionHeader } from '../components/common';
 import PhotoGallery from '../components/PhotoGallery';
 import ReviewDialog from '../components/ReviewDialog';
 import { useAuth } from '../context/AuthContext';
@@ -483,11 +489,11 @@ function OverviewTab({
       <Grid item xs={12} md={8}>
         <Card>
           <CardContent>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-              <Typography variant="h6" fontWeight={700}>
-                Job Details
-              </Typography>
-              {!readOnly &&
+            <SectionHeader
+              icon={<BadgeOutlinedIcon />}
+              title="Job Details"
+              action={
+                !readOnly &&
                 (editing ? (
                   <Stack direction="row" spacing={1}>
                     <Button size="small" onClick={() => setEditing(false)}>
@@ -501,8 +507,9 @@ function OverviewTab({
                   <Button size="small" onClick={() => setEditing(true)}>
                     Edit
                   </Button>
-                ))}
-            </Stack>
+                ))
+              }
+            />
 
             {editing ? (
               <Grid container spacing={2}>
@@ -599,9 +606,7 @@ function OverviewTab({
       <Grid item xs={12} md={4}>
         <Card>
           <CardContent>
-            <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
-              Status
-            </Typography>
+            <SectionHeader icon={<TuneOutlinedIcon />} title="Status" />
             {readOnly ? (
               <StatusBadge status={job.status} />
             ) : isAdmin ? (
@@ -669,11 +674,11 @@ function OverviewTab({
                 ? 'Download Certificate'
                 : 'Download Job Report'}
             </Button>
-            <Stack spacing={1}>
-              <Stat label="Inspections" value={job.inspections.length} />
-              <Stat label="Photos" value={job.photos.length} />
-              <Stat label="Documents" value={job.documents.length} />
-              <Stat label="Notes" value={job.notes.length} />
+            <Stack spacing={0.25}>
+              <Stat icon={<FactCheckOutlinedIcon />} label="Inspections" value={job.inspections.length} />
+              <Stat icon={<PhotoLibraryOutlinedIcon />} label="Photos" value={job.photos.length} />
+              <Stat icon={<FolderOutlinedIcon />} label="Documents" value={job.documents.length} />
+              <Stat icon={<StickyNote2OutlinedIcon />} label="Notes" value={job.notes.length} />
             </Stack>
           </CardContent>
         </Card>
@@ -724,10 +729,26 @@ function Row({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ icon, label, value }: { icon?: ReactNode; label: string; value: number }) {
   return (
-    <Stack direction="row" justifyContent="space-between">
-      <Typography color="text.secondary">{label}</Typography>
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      sx={{
+        py: 0.65,
+        px: 0.75,
+        mx: -0.75,
+        borderRadius: 1.5,
+        '&:hover': { bgcolor: 'action.hover' },
+      }}
+    >
+      <Stack direction="row" alignItems="center" spacing={1}>
+        {icon && (
+          <Box sx={{ color: 'text.secondary', display: 'flex', '& svg': { fontSize: 18 } }}>{icon}</Box>
+        )}
+        <Typography color="text.secondary">{label}</Typography>
+      </Stack>
       <Typography fontWeight={700}>{value}</Typography>
     </Stack>
   );

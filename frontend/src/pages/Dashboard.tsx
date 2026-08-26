@@ -18,7 +18,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EventIcon from '@mui/icons-material/Event';
 import HistoryIcon from '@mui/icons-material/History';
 import TrendingFlatIcon from '@mui/icons-material/ArrowOutward';
-import { BarChart } from '@mui/x-charts/BarChart';
+import { PieChart } from '@mui/x-charts/PieChart';
 import { useNavigate } from 'react-router-dom';
 import { getDashboard } from '../api/client';
 import { STATUS_COLORS, fmtDate, PageHeader } from '../components/common';
@@ -188,41 +188,110 @@ export default function Dashboard() {
               </Typography>
               <Divider sx={{ mb: 1 }} />
               {chartData.length ? (
-                <BarChart
-                  height={300}
-                  borderRadius={6}
-                  margin={{ left: 40, right: 10, top: 20, bottom: 72 }}
-                  xAxis={[
-                    {
-                      scaleType: 'band',
-                      data: chartData.map(([k]) => k),
-                      tickLabelStyle: { angle: -35, textAnchor: 'end', fontSize: 11 },
-                    },
-                  ]}
-                  series={[{ data: chartData.map(([, v]) => v), label: 'Jobs', color: '#3b82f6' }]}
-                  slotProps={{ legend: { hidden: true } }}
-                />
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    alignItems: 'center',
+                    gap: { xs: 1, sm: 3 },
+                    py: 1,
+                  }}
+                >
+                  <Box sx={{ position: 'relative', flexShrink: 0, width: 200, height: 200 }}>
+                    <PieChart
+                      width={200}
+                      height={200}
+                      margin={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                      series={[
+                        {
+                          data: chartData.map(([status, count]) => ({
+                            id: status,
+                            value: count,
+                            label: status,
+                            color: STATUS_COLORS[status] || '#94a3b8',
+                          })),
+                          innerRadius: 58,
+                          outerRadius: 90,
+                          paddingAngle: 1.5,
+                          cornerRadius: 3,
+                          highlightScope: { fade: 'global', highlight: 'item' },
+                        },
+                      ]}
+                      slotProps={{ legend: { hidden: true } }}
+                      onItemClick={(_e, item) => {
+                        const status = chartData[item.dataIndex]?.[0];
+                        if (status) navigate(`/jobs?status=${encodeURIComponent(status)}`);
+                      }}
+                      sx={{ cursor: 'pointer' }}
+                    />
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <Typography sx={{ fontFamily: fontMono, fontWeight: 700, fontSize: 28, lineHeight: 1 }}>
+                        {stats?.total ?? 0}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.25 }}>
+                        {stats?.total === 1 ? 'job' : 'jobs'}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ flex: 1, minWidth: 0, width: '100%' }}>
+                    {chartData.map(([status, count]) => {
+                      const color = STATUS_COLORS[status] || '#94a3b8';
+                      const pct = stats?.total ? Math.round((count / stats.total) * 100) : 0;
+                      return (
+                        <Box
+                          key={status}
+                          onClick={() => navigate(`/jobs?status=${encodeURIComponent(status)}`)}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1.25,
+                            py: 0.7,
+                            px: 0.75,
+                            mx: -0.75,
+                            borderRadius: 1.5,
+                            cursor: 'pointer',
+                            '&:hover': { bgcolor: `${color}14` },
+                          }}
+                        >
+                          <Box
+                            sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color, flexShrink: 0 }}
+                          />
+                          <Typography variant="body2" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }} noWrap>
+                            {status}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontFamily: fontMono, flexShrink: 0 }}
+                          >
+                            {pct}%
+                          </Typography>
+                          <Typography
+                            sx={{ fontFamily: fontMono, fontWeight: 700, fontSize: 14, width: 22, textAlign: 'right', flexShrink: 0 }}
+                          >
+                            {count}
+                          </Typography>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
               ) : (
                 <Typography variant="body2" color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
                   No jobs yet. Create one to see status analytics.
                 </Typography>
               )}
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-                {Object.entries(breakdown).map(([status, count]) => (
-                  <Chip
-                    key={status}
-                    onClick={() => navigate(`/jobs?status=${encodeURIComponent(status)}`)}
-                    label={`${status} · ${count}`}
-                    size="small"
-                    sx={{
-                      cursor: 'pointer',
-                      bgcolor: `${STATUS_COLORS[status]}1a`,
-                      color: STATUS_COLORS[status],
-                      border: `1px solid ${STATUS_COLORS[status]}44`,
-                    }}
-                  />
-                ))}
-              </Box>
             </CardContent>
           </Card>
         </Grid>

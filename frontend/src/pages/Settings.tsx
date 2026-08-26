@@ -27,6 +27,14 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import BuildIcon from '@mui/icons-material/Build';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
+import ConfirmationNumberOutlinedIcon from '@mui/icons-material/ConfirmationNumberOutlined';
+import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import SettingsBackupRestoreOutlinedIcon from '@mui/icons-material/SettingsBackupRestoreOutlined';
+import AndroidIcon from '@mui/icons-material/Android';
+import type { ReactNode } from 'react';
+import { SectionHeader } from '../components/common';
 import {
   getSettings,
   updateSettings,
@@ -46,19 +54,22 @@ import type { AppSettings } from '../types';
 const NO_RIGHTS_MSG =
   'Unfortunately, you do not have these rights. Please contact the Everton administrating team.';
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Section({
+  title,
+  subtitle,
+  icon,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <Card sx={{ mb: 3 }}>
       <CardContent>
-        <Typography variant="h6" fontWeight={700}>
-          {title}
-        </Typography>
-        {subtitle && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {subtitle}
-          </Typography>
-        )}
-        <Box sx={{ mt: 2 }}>{children}</Box>
+        <SectionHeader icon={icon} title={title} subtitle={subtitle} />
+        <Box>{children}</Box>
       </CardContent>
     </Card>
   );
@@ -326,7 +337,11 @@ export default function Settings() {
 
       {isAdmin && (
         <>
-      <Section title="Company & Branding" subtitle="Shown across the portal and on the dashboard.">
+      <Section
+        icon={<StorefrontOutlinedIcon />}
+        title="Company & Branding"
+        subtitle="Shown across the portal and on the dashboard."
+      >
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <TextField
@@ -375,6 +390,7 @@ export default function Settings() {
       </Section>
 
       <Section
+        icon={<ConfirmationNumberOutlinedIcon />}
         title="Job Numbering"
         subtitle='Prefix for new job numbers. Changing it does not reset the running sequence — e.g. "Job 12" → change prefix → "Everton 13".'
       >
@@ -386,7 +402,11 @@ export default function Settings() {
         />
       </Section>
 
-      <Section title="Email (SMTP)" subtitle="Optional. Used for outbound notifications.">
+      <Section
+        icon={<EmailOutlinedIcon />}
+        title="Email (SMTP)"
+        subtitle="Optional. Used for outbound notifications."
+      >
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <TextField
@@ -424,6 +444,7 @@ export default function Settings() {
       </Section>
 
       <Section
+        icon={<WhatsAppIcon />}
         title="WhatsApp Notifications"
         subtitle="Default country code used to build wa.me links when notifying a customer from a job."
       >
@@ -661,6 +682,7 @@ export default function Settings() {
 
       {isAdmin && (
         <Section
+          icon={<SettingsBackupRestoreOutlinedIcon />}
           title="Backup & Restore"
           subtitle="Download a complete copy of the system, or restore everything from a backup file."
         >
@@ -670,6 +692,7 @@ export default function Settings() {
 
       {isAdmin && (
         <Section
+          icon={<AndroidIcon />}
           title="Android App"
           subtitle="Download the WorkshopIQ Android app (.apk) to install on a device."
         >

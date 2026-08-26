@@ -1,4 +1,5 @@
 import { Avatar, Box, Chip, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import LockIcon from '@mui/icons-material/Lock';
 import type { ReactNode } from 'react';
 import { fontDisplay, fontMono } from '../theme/theme';
@@ -277,14 +278,111 @@ export function PageHeader({
   );
 }
 
-export function EmptyState({ icon, title, subtitle }: { icon?: ReactNode; title: string; subtitle?: string }) {
+/**
+ * "Nothing here yet" placeholder used across every list/tab in the app.
+ * The icon sits inside a soft tinted badge (rather than floating bare) so
+ * an empty screen still reads as designed, not broken — with an optional
+ * action for the handful of places that don't already have a CTA nearby.
+ */
+export function EmptyState({
+  icon,
+  title,
+  subtitle,
+  action,
+  tone = 'primary',
+}: {
+  icon?: ReactNode;
+  title: string;
+  subtitle?: ReactNode;
+  action?: ReactNode;
+  tone?: 'primary' | 'neutral';
+}) {
+  const tintColor = tone === 'primary' ? 'primary.main' : 'text.secondary';
   return (
-    <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
-      {icon}
-      <Typography variant="subtitle1" sx={{ mt: 1, fontWeight: 600 }}>
+    <Box sx={{ textAlign: 'center', py: { xs: 5, sm: 6.5 }, px: 2 }}>
+      {icon && (
+        <Box
+          sx={{
+            width: 68,
+            height: 68,
+            borderRadius: '50%',
+            display: 'grid',
+            placeItems: 'center',
+            mx: 'auto',
+            mb: 2,
+            color: tintColor,
+            bgcolor: (t) =>
+              tone === 'primary' ? alpha(t.palette.primary.main, 0.1) : alpha('#94a3b8', 0.08),
+            border: (t) =>
+              `1px solid ${alpha(tone === 'primary' ? t.palette.primary.main : '#94a3b8', 0.22)}`,
+          }}
+        >
+          {icon}
+        </Box>
+      )}
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>
         {title}
       </Typography>
-      {subtitle && <Typography variant="body2">{subtitle}</Typography>}
+      {subtitle && (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ mt: 0.5, maxWidth: 400, mx: 'auto' }}
+        >
+          {subtitle}
+        </Typography>
+      )}
+      {action && <Box sx={{ mt: 2.5, display: 'flex', justifyContent: 'center' }}>{action}</Box>}
+    </Box>
+  );
+}
+
+/**
+ * Small icon-in-a-chip badge + title (+ optional description/action) used to
+ * head up a card section — gives Settings/Templates-style stacks of cards a
+ * consistent, scannable rhythm instead of same-weight bare headings.
+ */
+export function SectionHeader({
+  icon,
+  title,
+  subtitle,
+  action,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  subtitle?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: subtitle ? 2 : 1.5 }}>
+      {icon && (
+        <Box
+          sx={{
+            width: 34,
+            height: 34,
+            borderRadius: '10px',
+            display: 'grid',
+            placeItems: 'center',
+            flexShrink: 0,
+            color: 'primary.main',
+            bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
+            '& svg': { fontSize: 19 },
+          }}
+        >
+          {icon}
+        </Box>
+      )}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="h6" sx={{ lineHeight: 1.25 }}>
+          {title}
+        </Typography>
+        {subtitle && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+            {subtitle}
+          </Typography>
+        )}
+      </Box>
+      {action && <Box sx={{ flexShrink: 0 }}>{action}</Box>}
     </Box>
   );
 }

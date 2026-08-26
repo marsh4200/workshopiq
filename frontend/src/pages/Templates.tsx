@@ -24,6 +24,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import SaveIcon from '@mui/icons-material/Save';
+import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import {
   listTemplates,
   updateTemplate,
@@ -32,6 +33,7 @@ import {
   fetchMeta,
   apiError,
 } from '../api/client';
+import { EmptyState } from '../components/common';
 import type { Template } from '../types';
 
 export default function Templates() {
@@ -161,6 +163,21 @@ export default function Templates() {
         <Accordion key={t.id} sx={{ mb: 1.5 }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Stack direction="row" alignItems="center" spacing={1.5} sx={{ width: '100%' }}>
+              <Box
+                sx={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: '8px',
+                  display: 'grid',
+                  placeItems: 'center',
+                  flexShrink: 0,
+                  color: 'primary.main',
+                  bgcolor: (theme) => `${theme.palette.primary.main}1c`,
+                  '& svg': { fontSize: 16 },
+                }}
+              >
+                <FactCheckOutlinedIcon />
+              </Box>
               <Typography fontWeight={700}>{t.component_type}</Typography>
               <Chip label={`${(edits[t.id] || []).length} items`} size="small" variant="outlined" />
             </Stack>
@@ -228,8 +245,12 @@ export default function Templates() {
       ))}
 
       {templates.length === 0 && (
-        <Card sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
-          No templates yet.
+        <Card>
+          <EmptyState
+            icon={<FactCheckOutlinedIcon sx={{ fontSize: 40 }} />}
+            title="No templates yet"
+            subtitle="Create a checklist template for each component type your workshop inspects."
+          />
         </Card>
       )}
 

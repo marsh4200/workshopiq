@@ -164,6 +164,10 @@ export function buildTheme(mode: ThemeMode): Theme {
                 : 'none',
             border: `1px solid ${p.line}`,
             borderRadius: 14,
+            boxShadow:
+              mode === 'dark'
+                ? `0 1px 0 ${alpha('#fff', 0.03)} inset, 0 10px 24px -18px ${alpha('#000', 0.7)}`
+                : `0 1px 0 ${alpha('#fff', 0.6)} inset, 0 10px 24px -18px ${alpha('#0f172a', 0.18)}`,
             transition: 'border-color .18s ease, transform .18s ease, box-shadow .18s ease',
           },
         },
