@@ -404,7 +404,10 @@ async def delete_report(
 # table and sign-off block — with the cells turned into inputs. It is NOT the
 # dark WorkshopIQ chrome; it deliberately looks like the printed form.
 
-INITIAL_ROWS = 15  # empty measurement rows shown on load (like the paper sheet)
+INITIAL_ROWS = 6  # empty measurement rows shown on load — "+ Add row" covers the
+# rest. The paper sheet had 15 fixed rows, but the PDF is sized from whatever
+# was actually filled in (see inspection_report_service), so pre-rendering 15
+# blank rows only adds scrolling — especially painful on a phone.
 
 
 def _hv(value: str) -> str:
@@ -471,17 +474,28 @@ def _meas_row() -> str:
     DESCRIPTION most often needs the room, but a tolerance or a finished-size
     note can run long too, and all of them now grow instead of scrolling out
     of view.
+
+    Each ``<td>`` also carries a ``data-label`` — unused on a normal-width
+    screen (the column headers already say it), but on a phone this same
+    table collapses into one card per row with the label printed above each
+    field (see the ``@media`` block in ``_form_html``), instead of the row
+    staying 7 columns wide and forcing side-to-side scrolling to fill in a
+    single measurement.
     """
+    remove_btn = (
+        '<button type="button" class="rm" title="Remove row" '
+        'aria-label="Remove row" onclick="removeRow(this)">✕</button>'
+    )
     return (
-        "<tr>"
-        f'<td>{_ta(data_k="description", css="desc")}</td>'
-        f'<td>{_ta(data_k="tol1")}</td>'
-        f'<td>{_ta(data_k="tol2")}</td>'
-        f'<td>{_ta(data_k="req")}</td>'
-        f'<td>{_ta(data_k="act")}</td>'
-        f'<td>{_ta(data_k="finished")}</td>'
-        f"<td>{_accept_select()}</td>"
-        "</tr>"
+        '<tr>'
+        f'<td data-label="Description">{_ta(data_k="description", css="desc")}</td>'
+        f'<td data-label="Drawing size tol (1)">{_ta(data_k="tol1")}</td>'
+        f'<td data-label="Drawing size tol (2)">{_ta(data_k="tol2")}</td>'
+        f'<td data-label="Actual size — req">{_ta(data_k="req")}</td>'
+        f'<td data-label="Actual size — act">{_ta(data_k="act")}</td>'
+        f'<td data-label="Finished">{_ta(data_k="finished")}</td>'
+        f'<td data-label="Accept" class="accept-cell">{_accept_select()}{remove_btn}</td>'
+        '</tr>'
     )
 
 
@@ -532,7 +546,11 @@ def _form_html(token: str, job: Job, h: dict) -> str:
     outline:none; background:#eef4ff; }}
   table.meas textarea {{ resize:none; overflow:hidden; display:block; line-height:1.3; }}
   table.meas textarea.desc {{ text-align:left; }}
-  .acc {{ text-align:center; font-weight:700; }}
+  .acc {{ text-align:center; font-weight:700; flex:1; }}
+  .accept-cell {{ display:flex; align-items:center; justify-content:center; }}
+  .rm {{ border:0; background:transparent; color:#b3261e; font-size:15px; line-height:1;
+    cursor:pointer; padding:4px; opacity:.55; flex-shrink:0; }}
+  .rm:hover, .rm:active {{ opacity:1; }}
   /* column widths */
   .meas col.c-desc {{ width:30%; }}
   .meas col.c-sm {{ width:14%; }}
@@ -567,6 +585,87 @@ def _form_html(token: str, job: Job, h: dict) -> str:
   .submit-bar button:active {{ transform:translateY(1px); }}
   .hint {{ max-width:880px; margin:8px auto 0; font-size:12px; color:#555; text-align:center; }}
   .reqd {{ color:#c0392b; }}
+
+  /* ---------------------------------------------------------------------
+     Phone layout. Below this, the paper-sheet grids stop being "tables you
+     scroll sideways to fill in" and become one full-width field/card per
+     row — the layout still holds the same inputs, just stacked so nothing
+     is off-screen. Also bumps every field to 16px so iOS Safari doesn't
+     zoom the page in on focus (anything smaller triggers that).
+  --------------------------------------------------------------------- */
+  @media (max-width: 700px) {{
+    body {{ padding:10px 6px 90px; }}
+    .sheet {{ padding:10px; }}
+
+    /* Header grid: CERTIFICATE/DATE/CUSTOMER/... one field per line
+       instead of two label+value pairs squeezed side by side. */
+    .grid, .grid tbody, .grid tr, .grid td {{ display:block; width:100% !important; }}
+    .grid td.lbl {{ padding:6px 8px; }}
+    .grid td.lbl:empty, .grid td.lbl:empty + td {{ display:none; }}
+
+    /* Measurement table -> one card per row, with the column name shown
+       above each field (from data-label) instead of only in a header row
+       that would otherwise scroll off to the side. */
+    .hscroll {{ overflow-x:visible; margin-top:14px; }}
+    table.meas {{ min-width:0; }}
+    table.meas thead {{ display:none; }}
+    table.meas, table.meas tbody {{ display:block; width:100%; }}
+    table.meas tbody {{ counter-reset:mrow; }}
+    table.meas tr {{
+      display:block; counter-increment:mrow; margin-bottom:14px; border:1px solid #000;
+      border-radius:8px; overflow:hidden; background:#fff;
+    }}
+    table.meas tr::before {{
+      content:"Measurement " counter(mrow); display:block; background:#1f3fae; color:#fff;
+      font-weight:700; font-size:12px; letter-spacing:.03em; padding:7px 10px;
+    }}
+    table.meas td {{
+      display:block; width:100% !important; border:0; border-top:1px solid #ddd;
+    }}
+    table.meas tr td:first-child {{ border-top:0; }}
+    table.meas td::before {{
+      content:attr(data-label); display:block; font-size:11px; font-weight:700;
+      color:#555; text-transform:uppercase; letter-spacing:.03em; padding:7px 10px 0;
+    }}
+    table.meas input, table.meas select, table.meas textarea {{ text-align:left; padding:8px 10px 10px; }}
+    .accept-cell {{ justify-content:flex-start; gap:10px; padding-bottom:6px; }}
+    .acc {{ flex:0 0 auto; width:110px !important; }}
+    .rm {{ font-size:19px; padding:8px; opacity:.75; }}
+
+    /* Result + sign-off: stack instead of cramming 3 (or 2) blocks across
+       a 390px screen. */
+    table.result, table.result tbody, table.result tr, table.result td {{
+      display:block; width:100% !important; text-align:left;
+    }}
+    table.result td.lbl {{ padding-top:10px; }}
+    /* The sign-off table is 2 columns (Inspection Everton | Customer), each
+       column itself a 3-row name/date/signature block. A plain stack would
+       interleave them (both names, then both dates, then both signatures) —
+       confusing on a phone. Grid + order groups every Everton field together,
+       then every Customer field, while keeping name/date/signature in order
+       within each (equal `order` falls back to source order). */
+    /* Scoped to DIRECT children only (table.sign > tbody > tr > *) — these
+       rows also contain a nested label/value table per field, and a plain
+       descendant selector here would reach into those nested tables too and
+       wreck their column widths. */
+    table.sign {{ display:grid; grid-template-columns:1fr; row-gap:0; }}
+    table.sign > tbody {{ display:contents; }}
+    table.sign > tbody > tr {{ display:contents; }}
+    table.sign > tbody > tr > * {{ width:100% !important; }}
+    table.sign > tbody > tr > *:nth-child(1) {{ order:1; }}
+    table.sign > tbody > tr > *:nth-child(2) {{ order:2; }}
+    table.sign th {{ margin-top:14px; }}
+    table.sign > tbody > tr:first-child th {{ margin-top:0; }}
+
+    /* 16px stops Safari's auto-zoom-on-focus; padding gives real tap targets. */
+    .grid input, .grid textarea,
+    table.meas input, table.meas select, table.meas textarea,
+    table.result select, .yn,
+    table.sign input, table.sign textarea, table.sign select.cellsel {{
+      font-size:16px; padding-top:11px; padding-bottom:11px;
+    }}
+    .addrow button {{ width:100%; padding:12px; font-size:14px; }}
+  }}
 </style>
 </head>
 <body>
@@ -669,6 +768,18 @@ def _form_html(token: str, job: Job, h: dict) -> str:
   var tpl = document.getElementById('rowtpl');
   function addRow() {{
     tbody.appendChild(tpl.content.cloneNode(true));
+    // On a long phone form a row appended at the bottom is easy to miss —
+    // bring it into view and drop the cursor straight into Description.
+    var last = tbody.lastElementChild;
+    if (last) {{
+      last.scrollIntoView({{ block: 'center', behavior: 'smooth' }});
+      var first = last.querySelector('[data-k=description]');
+      if (first) first.focus();
+    }}
+  }}
+  function removeRow(btn) {{
+    var tr = btn.closest('tr');
+    if (tr) tr.remove();
   }}
   // Description fields are auto-growing textareas so long text stays fully
   // visible instead of scrolling out of a single-line box. Delegated on the
