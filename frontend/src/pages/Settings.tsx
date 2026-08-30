@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  CardActionArea,
   CardContent,
   Chip,
   CircularProgress,
@@ -34,6 +35,8 @@ import SendIcon from '@mui/icons-material/Send';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import SettingsBackupRestoreOutlinedIcon from '@mui/icons-material/SettingsBackupRestoreOutlined';
 import AndroidIcon from '@mui/icons-material/Android';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import type { ReactNode } from 'react';
 import { SectionHeader } from '../components/common';
 import {
@@ -77,9 +80,61 @@ function Section({
   );
 }
 
+type SettingsSection = 'branding' | 'email' | 'notifications' | 'updates' | 'backup' | 'android';
+
+function Tile({
+  icon,
+  title,
+  subtitle,
+  badge,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  badge?: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <Grid item xs={12} sm={6}>
+      <Card variant="outlined" sx={{ height: '100%' }}>
+        <CardActionArea onClick={onClick} sx={{ height: '100%', p: 0.5 }}>
+          <CardContent sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.75 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                placeItems: 'center',
+                width: 44,
+                height: 44,
+                borderRadius: 2,
+                flexShrink: 0,
+                bgcolor: 'action.hover',
+                color: 'primary.main',
+              }}
+            >
+              {icon}
+            </Box>
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography fontWeight={700}>{title}</Typography>
+                {badge}
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                {subtitle}
+              </Typography>
+            </Box>
+            <ChevronRightIcon sx={{ color: 'text.disabled', flexShrink: 0, mt: 0.5 }} />
+          </CardContent>
+        </CardActionArea>
+      </Card>
+    </Grid>
+  );
+}
+
 export default function Settings() {
   const { reload } = useSettings();
   const { isAdmin } = useAuth();
+  const [section, setSection] = useState<SettingsSection | null>(null);
   const [s, setS] = useState<AppSettings | null>(null);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
@@ -362,7 +417,73 @@ export default function Settings() {
         </Alert>
       )}
 
-      {isAdmin && (
+      {section && (
+        <Button startIcon={<ArrowBackIcon />} onClick={() => setSection(null)} sx={{ mb: 2 }}>
+          Back to Settings
+        </Button>
+      )}
+
+      {!section && (
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {isAdmin && (
+            <Tile
+              icon={<StorefrontOutlinedIcon />}
+              title="Company & Branding"
+              subtitle="Company name, logo, tagline and job numbering."
+              onClick={() => setSection('branding')}
+            />
+          )}
+          {isAdmin && (
+            <Tile
+              icon={<EmailOutlinedIcon />}
+              title="Email"
+              subtitle="The SMTP account WorkshopIQ sends emails from."
+              onClick={() => setSection('email')}
+            />
+          )}
+          {isAdmin && (
+            <Tile
+              icon={<WhatsAppIcon />}
+              title="Notifications"
+              subtitle="WhatsApp default country code for customer messages."
+              onClick={() => setSection('notifications')}
+            />
+          )}
+          <Tile
+            icon={<SystemUpdateAltIcon />}
+            title="Software Updates"
+            subtitle={
+              updateAvailable
+                ? `Update available: v${s.available_version}`
+                : `Installed: v${s.current_version}`
+            }
+            badge={
+              updateAvailable ? (
+                <Chip size="small" color="success" label="Update available" sx={{ fontWeight: 700 }} />
+              ) : undefined
+            }
+            onClick={() => setSection('updates')}
+          />
+          {isAdmin && (
+            <Tile
+              icon={<SettingsBackupRestoreOutlinedIcon />}
+              title="Backup & Restore"
+              subtitle="Download a full backup, or restore everything from a backup file."
+              onClick={() => setSection('backup')}
+            />
+          )}
+          {isAdmin && (
+            <Tile
+              icon={<AndroidIcon />}
+              title="Android App"
+              subtitle="Download the WorkshopIQ Android app (.apk) to install on a device."
+              onClick={() => setSection('android')}
+            />
+          )}
+        </Grid>
+      )}
+
+      {section === 'branding' && isAdmin && (
         <>
       <Section
         icon={<StorefrontOutlinedIcon />}
@@ -429,6 +550,16 @@ export default function Settings() {
         />
       </Section>
 
+      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
+        <Button variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save Settings'}
+        </Button>
+      </Stack>
+        </>
+      )}
+
+      {section === 'email' && isAdmin && (
+        <>
       <Section
         icon={<EmailOutlinedIcon />}
         title="Email (SMTP)"
@@ -521,6 +652,16 @@ export default function Settings() {
         )}
       </Section>
 
+      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
+        <Button variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save Settings'}
+        </Button>
+      </Stack>
+        </>
+      )}
+
+      {section === 'notifications' && isAdmin && (
+        <>
       <Section
         icon={<WhatsAppIcon />}
         title="WhatsApp Notifications"
@@ -539,7 +680,7 @@ export default function Settings() {
         </Grid>
       </Section>
 
-      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 4 }}>
+      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
         <Button variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={saving}>
           {saving ? 'Saving…' : 'Save Settings'}
         </Button>
@@ -547,6 +688,7 @@ export default function Settings() {
         </>
       )}
 
+      {section === 'updates' && (
       <Card
         sx={{
           mb: 3,
@@ -757,8 +899,9 @@ export default function Settings() {
           </Box>
         </CardContent>
       </Card>
+      )}
 
-      {isAdmin && (
+      {section === 'backup' && isAdmin && (
         <Section
           icon={<SettingsBackupRestoreOutlinedIcon />}
           title="Backup & Restore"
@@ -768,7 +911,7 @@ export default function Settings() {
         </Section>
       )}
 
-      {isAdmin && (
+      {section === 'android' && isAdmin && (
         <Section
           icon={<AndroidIcon />}
           title="Android App"
@@ -778,7 +921,7 @@ export default function Settings() {
         </Section>
       )}
 
-      {isAdmin && s && (showMaint || s.maintenance_mode || s.server_shutdown) && (
+      {!section && isAdmin && s && (showMaint || s.maintenance_mode || s.server_shutdown) && (
         <Card
           sx={{
             mb: 3,
@@ -903,7 +1046,7 @@ export default function Settings() {
         </Card>
       )}
 
-      {isAdmin && (
+      {!section && isAdmin && (
         <Box sx={{ textAlign: 'center', mt: 1, mb: 2 }}>
           <Typography
             variant="caption"
