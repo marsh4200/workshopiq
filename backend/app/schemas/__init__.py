@@ -72,10 +72,6 @@ class SettingsOut(BaseModel):
     email_from: Optional[str] = None
     # Never echoes the actual password back — just whether one is stored.
     email_password_set: bool = False
-    # Administrator-only: whether assigned client(s) get emailed on a general
-    # status change / when a job reaches "Completed".
-    notify_on_status_change: bool = False
-    notify_on_job_completion: bool = False
     whatsapp_country_code: Optional[str] = None
     github_repo_url: Optional[str] = None
     current_version: str
@@ -95,8 +91,6 @@ class SettingsUpdate(BaseModel):
     email_user: Optional[str] = None
     email_password: Optional[str] = None
     email_from: Optional[str] = None
-    notify_on_status_change: Optional[bool] = None
-    notify_on_job_completion: Optional[bool] = None
     whatsapp_country_code: Optional[str] = None
     github_repo_url: Optional[str] = None
     backup_before_update: Optional[bool] = None
@@ -305,6 +299,16 @@ class JobUpdate(BaseModel):
     component_type: Optional[str] = None
     quantity: Optional[int] = None
     status: Optional[str] = None
+    # Per-job manual email-notification toggles (see JobEmailSend below).
+    notify_on_status_change: Optional[bool] = None
+    notify_on_job_completion: Optional[bool] = None
+
+
+class JobEmailSend(BaseModel):
+    """Manual send — staff composed (or accepted) this subject/body themselves."""
+    kind: str  # "status" | "completion"
+    subject: str
+    body: str
 
 
 class FinalInspectionAttemptOut(BaseModel):
@@ -454,6 +458,10 @@ class JobDetailOut(JobListOut):
     client_names: list[str] = []
     final_inspection: Optional[FinalInspectionOut] = None
     checked_in: bool = False
+    notify_on_status_change: bool = False
+    notify_on_job_completion: bool = False
+    last_status_email_at: Optional[datetime] = None
+    last_completion_email_at: Optional[datetime] = None
 
 
 class AssignClientsRequest(BaseModel):

@@ -160,6 +160,11 @@ export const addNote = async (jobId: number, note_type: string, body: string) =>
 export const logWhatsapp = async (jobId: number) =>
   (await api.post<JobDetail>(`/jobs/${jobId}/whatsapp-log`, {})).data;
 
+export const sendJobEmail = async (
+  jobId: number,
+  body: { kind: 'status' | 'completion'; subject: string; body: string },
+) => (await api.post<JobDetail>(`/jobs/${jobId}/send-email`, body)).data;
+
 // Photos & documents
 export const uploadPhotos = async (
   jobId: number,

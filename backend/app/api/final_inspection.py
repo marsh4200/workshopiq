@@ -54,7 +54,6 @@ from app.schemas import (
     PendingClosureItem,
     PendingInspectionItem,
 )
-from app.services import email_service
 
 router = APIRouter(tags=["final-inspection"])
 
@@ -110,24 +109,13 @@ async def _next_attempt_number(db: AsyncSession, fi_id: int) -> int:
     return (existing or 0) + 1
 
 
-async def _set_status(
-    db: AsyncSession, job: Job, new_status: str, user: User
-) -> tuple[str, str] | None:
-    """Set job.status (+ timeline event) if it actually changes.
-
-    Returns the (old, new) status pair for the caller to pass to
-    email_service.notify_job_status_changed AFTER its db.commit() — callers
-    must not skip that, or clients get emailed about a change that might
-    still roll back.
-    """
+async def _set_status(db: AsyncSession, job: Job, new_status: str, user: User) -> None:
     if job.status != new_status:
         old = job.status
         job.status = new_status
         await log_event(
             db, job.id, "status_change", f"Status changed: {old} → {new_status}", user
         )
-        return (old, new_status)
-    return None
 
 
 @router.post(
@@ -173,7 +161,7 @@ async def release_final_inspection(
         fi = FinalInspection(job_id=job_id, requested_by_id=user.id)
         db.add(fi)
         await log_event(db, job_id, "final_inspection", "Final inspection released", user)
-        changed = await _set_status(db, job, INSPECTION_STATUS, user)
+        await _set_status(db, job, INSPECTION_STATUS, user)
     elif fi.completed:
         # Already passed — nothing to release.
         return await _get_fi_with_log(db, job_id)
@@ -187,14 +175,12 @@ async def release_final_inspection(
             f"Sent for re-inspection (attempt {fi.attempts + 1})",
             user,
         )
-        changed = await _set_status(db, job, INSPECTION_STATUS, user)
+        await _set_status(db, job, INSPECTION_STATUS, user)
     else:
         # Already released and pending — just make sure the stage is right.
-        changed = await _set_status(db, job, INSPECTION_STATUS, user)
+        await _set_status(db, job, INSPECTION_STATUS, user)
 
     await db.commit()
-    if changed:
-        await email_service.notify_job_status_changed(db, job, *changed)
     return await _get_fi_with_log(db, job_id)
 
 
@@ -244,19 +230,15 @@ async def cancel_final_inspection(
         await log_event(
             db, job_id, "final_inspection", "Re-inspection cancelled", user
         )
-        changed = await _set_status(db, job, FAILED_STATUS, user)
+        await _set_status(db, job, FAILED_STATUS, user)
         await db.commit()
-        if changed:
-            await email_service.notify_job_status_changed(db, job, *changed)
         return await _get_fi_with_log(db, job_id)
 
     # First-time release, never failed, nothing logged yet — fully undo it.
     await log_event(db, job_id, "final_inspection", "Final inspection cancelled", user)
     await db.delete(fi)
-    changed = await _set_status(db, job, "Machining", user)
+    await _set_status(db, job, "Machining", user)
     await db.commit()
-    if changed:
-        await email_service.notify_job_status_changed(db, job, *changed)
     return None
 
 
@@ -371,11 +353,9 @@ async def submit_final_inspection(
     await log_event(
         db, job_id, "final_inspection", f"Final inspection passed by {name}", user
     )
-    changed = await _set_status(db, job, COMPLETED_STATUS, user)
+    await _set_status(db, job, COMPLETED_STATUS, user)
 
     await db.commit()
-    if changed:
-        await email_service.notify_job_status_changed(db, job, *changed)
     return await _get_fi_with_log(db, job_id)
 
 
@@ -471,11 +451,9 @@ async def fail_final_inspection(
         log_detail,
         user,
     )
-    changed = await _set_status(db, job, FAILED_STATUS, user)
+    await _set_status(db, job, FAILED_STATUS, user)
 
     await db.commit()
-    if changed:
-        await email_service.notify_job_status_changed(db, job, *changed)
     return await _get_fi_with_log(db, job_id)
 
 
@@ -674,11 +652,9 @@ async def approve_closure(
     await log_event(db, job_id, "final_inspection", detail, user)
     # Closure bypasses the client entirely, so there's no review coming to move
     # it Completed -> Closed the normal way — go straight to Closed.
-    changed = await _set_status(db, job, "Closed", user)
+    await _set_status(db, job, "Closed", user)
 
     await db.commit()
-    if changed:
-        await email_service.notify_job_status_changed(db, job, *changed)
     return await _get_fi_with_log(db, job_id)
 
 

@@ -1,6 +1,7 @@
 """Job lifecycle endpoints: jobs, notes, photos, documents, inspections."""
 import mimetypes
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -39,6 +40,7 @@ from app.schemas import (
     InspectionUpdate,
     JobCreate,
     JobDetailOut,
+    JobEmailSend,
     JobListOut,
     JobUpdate,
     NoteCreate,
@@ -225,7 +227,6 @@ async def update_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    status_changed: tuple[str, str] | None = None
     if payload.status and payload.status != job.status:
         if payload.status not in JOB_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status")
@@ -243,7 +244,6 @@ async def update_job(
         await log_event(
             db, job.id, "status_change", f"Status changed: {old} → {payload.status}", user
         )
-        status_changed = (old, payload.status)
 
     for field in (
         "customer_name",
@@ -254,6 +254,8 @@ async def update_job(
         "eq_number",
         "description",
         "component_type",
+        "notify_on_status_change",
+        "notify_on_job_completion",
     ):
         value = getattr(payload, field)
         if value is not None:
@@ -268,8 +270,6 @@ async def update_job(
         job.due_date = payload.due_date
 
     await db.commit()
-    if status_changed:
-        await email_service.notify_job_status_changed(db, job, *status_changed)
     detail = await load_job_detail(db, job_id)
     return serialize_detail(detail)
 
@@ -291,6 +291,67 @@ async def log_whatsapp(
     await log_event(
         db, job.id, "whatsapp", "WhatsApp update sent to customer", user
     )
+    await db.commit()
+    detail = await load_job_detail(db, job_id)
+    return serialize_detail(detail)
+
+
+@router.post("/{job_id}/send-email", response_model=JobDetailOut)
+async def send_job_email(
+    job_id: int,
+    payload: JobEmailSend,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+):
+    """Manually send a notification email to the job's own contact email.
+
+    Nothing in WorkshopIQ triggers this on its own — a staff/admin member
+    opens the job, reviews the drafted subject/body (composed client-side,
+    the same way the WhatsApp message is), and presses Send. Unlike the
+    WhatsApp button, which just opens a wa.me link, this one actually sends
+    via the SMTP account configured in Settings.
+    """
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not job.email:
+        raise HTTPException(status_code=400, detail="This job has no customer email on file.")
+
+    if payload.kind == "completion":
+        if not job.notify_on_job_completion:
+            raise HTTPException(
+                status_code=409,
+                detail="Completion emails are turned off for this job — enable that toggle first.",
+            )
+    elif payload.kind == "status":
+        if not job.notify_on_status_change:
+            raise HTTPException(
+                status_code=409,
+                detail="Status-change emails are turned off for this job — enable that toggle first.",
+            )
+    else:
+        raise HTTPException(status_code=400, detail="Invalid kind")
+
+    subject = payload.subject.strip()
+    body = payload.body.strip()
+    if not subject or not body:
+        raise HTTPException(status_code=400, detail="Subject and body are required")
+
+    try:
+        await email_service.send_email(db, [job.email], subject, body)
+    except email_service.EmailNotConfigured as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 — surface the SMTP failure to staff
+        raise HTTPException(status_code=502, detail=f"Send failed: {exc}")
+
+    now = datetime.now(timezone.utc)
+    if payload.kind == "completion":
+        job.last_completion_email_at = now
+        log_desc = f"Completion email sent to {job.email}"
+    else:
+        job.last_status_email_at = now
+        log_desc = f"Status update email sent to {job.email}"
+    await log_event(db, job.id, "email", log_desc, user)
     await db.commit()
     detail = await load_job_detail(db, job_id)
     return serialize_detail(detail)

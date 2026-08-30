@@ -30,10 +30,6 @@ async def _build_settings_out(db: AsyncSession) -> SettingsOut:
         email_user=s.get("email_user") or None,
         email_from=s.get("email_from") or None,
         email_password_set=bool(s.get("email_password")),
-        notify_on_status_change=str(s.get("notify_on_status_change", "0")).lower()
-        in ("1", "true", "yes", "on"),
-        notify_on_job_completion=str(s.get("notify_on_job_completion", "0")).lower()
-        in ("1", "true", "yes", "on"),
         whatsapp_country_code=s.get("whatsapp_country_code") or "27",
         github_repo_url=s.get("github_repo_url") or None,
         current_version=s.get("current_version", app_settings.APP_VERSION),

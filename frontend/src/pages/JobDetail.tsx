@@ -21,6 +21,7 @@ import {
   MenuItem,
   Rating,
   Stack,
+  Switch,
   Tab,
   Table,
   TableBody,
@@ -47,6 +48,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PrintIcon from '@mui/icons-material/Print';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
+import SendIcon from '@mui/icons-material/Send';
 import StarBorderPurple500Icon from '@mui/icons-material/StarBorderPurple500';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
@@ -87,6 +90,7 @@ import {
   approveClosure,
   rejectClosure,
   logWhatsapp,
+  sendJobEmail,
   downloadCertificate,
   downloadJobPack,
   apiError,
@@ -145,6 +149,48 @@ function whatsappMessage(job: JobDetailT, company: string, origin: string): stri
       line = `We've received your job ${job.job_number} and it's now logged.`;
   }
   return `${head} ${line}\nTrack progress: ${origin}`;
+}
+
+/** Draft a status-aware notification email — staff review/edit this before sending. */
+function draftEmail(
+  kind: 'status' | 'completion',
+  job: JobDetailT,
+  company: string,
+): { subject: string; body: string } {
+  const who = job.contact_person || job.customer_name || 'there';
+  let line: string;
+  if (kind === 'completion') {
+    line = `Good news — job ${job.job_number} is complete and ready for collection.`;
+  } else {
+    switch (job.status) {
+      case 'Inspection':
+        line = `Your job ${job.job_number} has moved to final inspection.`;
+        break;
+      case 'Inspection Failed':
+        line = `Your job ${job.job_number} needs rework after inspection — we'll keep you posted.`;
+        break;
+      case 'Machining':
+        line = `Your job ${job.job_number} is now in production.`;
+        break;
+      case 'Completed':
+        line = `Your job ${job.job_number} is complete.`;
+        break;
+      case 'Awaiting Customer Review':
+        line = `Your job ${job.job_number} is complete and awaiting your review.`;
+        break;
+      case 'Closed':
+        line = `Your job ${job.job_number} is now closed. Thank you for your business.`;
+        break;
+      default:
+        line = `We've received your job ${job.job_number} and it's now logged.`;
+    }
+  }
+  const subject =
+    kind === 'completion'
+      ? `${job.job_number} — your job is complete`
+      : `${job.job_number} — status update: ${job.status}`;
+  const body = `Hi ${who},\n\nThis is ${company}. ${line}\n\nIf you have any questions, please get in touch.\n\nThanks,\n${company}`;
+  return { subject, body };
 }
 
 const NOTE_TYPES = [
@@ -449,6 +495,51 @@ function OverviewTab({
       .catch(() => undefined);
   };
 
+  // Email notifications: fully manual — the toggles below only decide whether
+  // the Send buttons show up. Clicking one opens a preview/edit dialog; the
+  // email only actually goes out once staff presses Send in that dialog.
+  const [emailDialog, setEmailDialog] = useState<'status' | 'completion' | null>(null);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailDialogError, setEmailDialogError] = useState('');
+
+  const openEmailDialog = (kind: 'status' | 'completion') => {
+    const company = settings?.company_name || 'WorkshopIQ';
+    const { subject, body } = draftEmail(kind, job, company);
+    setEmailSubject(subject);
+    setEmailBody(body);
+    setEmailDialogError('');
+    setEmailDialog(kind);
+  };
+
+  const sendEmailNow = async () => {
+    if (!emailDialog) return;
+    setSendingEmail(true);
+    setEmailDialogError('');
+    try {
+      await sendJobEmail(job.id, { kind: emailDialog, subject: emailSubject, body: emailBody });
+      await onUpdate();
+      setEmailDialog(null);
+    } catch (e) {
+      setEmailDialogError(apiError(e, 'Failed to send email'));
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const toggleJobNotify = async (
+    key: 'notify_on_status_change' | 'notify_on_job_completion',
+    value: boolean,
+  ) => {
+    try {
+      await updateJob(job.id, { [key]: value });
+      await onUpdate();
+    } catch (e) {
+      setError(apiError(e, 'Could not change the notification setting'));
+    }
+  };
+
   const [certBusy, setCertBusy] = useState(false);
   const certPassed = job.final_inspection?.result === 'passed';
   const handleCertificate = async () => {
@@ -675,6 +766,83 @@ function OverviewTab({
                 Notify on WhatsApp
               </Button>
             )}
+            {!readOnly && (
+              <Box sx={{ mb: 2 }}>
+                <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }}>
+                  <EmailOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                    EMAIL NOTIFICATIONS
+                  </Typography>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  These switches just decide which Send buttons show up below — nothing
+                  is emailed until you press Send and confirm.
+                </Typography>
+                <Stack>
+                  <FormControlLabel
+                    sx={{ ml: -1 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={job.notify_on_status_change}
+                        onChange={(e) => toggleJobNotify('notify_on_status_change', e.target.checked)}
+                      />
+                    }
+                    label={<Typography variant="body2">Status-change emails</Typography>}
+                  />
+                  <FormControlLabel
+                    sx={{ ml: -1 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={job.notify_on_job_completion}
+                        onChange={(e) => toggleJobNotify('notify_on_job_completion', e.target.checked)}
+                      />
+                    }
+                    label={<Typography variant="body2">Completion email</Typography>}
+                  />
+                </Stack>
+                {!job.email && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                    Add a customer email above to enable sending.
+                  </Typography>
+                )}
+                {job.email && job.notify_on_status_change && (
+                  <Button
+                    fullWidth
+                    size="small"
+                    variant="outlined"
+                    startIcon={<SendIcon />}
+                    onClick={() => openEmailDialog('status')}
+                    sx={{ mt: 1 }}
+                  >
+                    Send Status Email
+                  </Button>
+                )}
+                {job.last_status_email_at && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                    Last sent {fmtDate(job.last_status_email_at)}
+                  </Typography>
+                )}
+                {job.email && job.notify_on_job_completion && job.status === 'Completed' && (
+                  <Button
+                    fullWidth
+                    size="small"
+                    variant="outlined"
+                    startIcon={<SendIcon />}
+                    onClick={() => openEmailDialog('completion')}
+                    sx={{ mt: 1 }}
+                  >
+                    Send Completion Email
+                  </Button>
+                )}
+                {job.last_completion_email_at && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                    Last sent {fmtDate(job.last_completion_email_at)}
+                  </Typography>
+                )}
+              </Box>
+            )}
             <Button
               fullWidth
               variant="outlined"
@@ -744,6 +912,57 @@ function OverviewTab({
             }}
           >
             {closing ? 'Closing…' : 'Close Job'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!emailDialog}
+        onClose={() => !sendingEmail && setEmailDialog(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {emailDialog === 'completion' ? 'Send Completion Email' : 'Send Status Email'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Sending to <strong>{job.email}</strong>. Review or edit before sending — nothing
+            goes out until you press Send below.
+          </Typography>
+          <Stack spacing={2}>
+            <TextField
+              label="Subject"
+              fullWidth
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+            />
+            <TextField
+              label="Message"
+              fullWidth
+              multiline
+              minRows={6}
+              value={emailBody}
+              onChange={(e) => setEmailBody(e.target.value)}
+            />
+          </Stack>
+          {emailDialogError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {emailDialogError}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setEmailDialog(null)} disabled={sendingEmail}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<SendIcon />}
+            disabled={sendingEmail || !emailSubject.trim() || !emailBody.trim()}
+            onClick={sendEmailNow}
+          >
+            {sendingEmail ? 'Sending…' : 'Send'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -216,20 +216,6 @@ export default function Settings() {
     }
   };
 
-  const toggleNotify = async (
-    key: 'notify_on_status_change' | 'notify_on_job_completion',
-    value: boolean,
-  ) => {
-    setS((prev) => (prev ? { ...prev, [key]: value } : prev));
-    try {
-      const updated = await updateSettings({ [key]: value });
-      setS(updated);
-    } catch (e) {
-      setError(apiError(e, 'Could not change the notification setting'));
-      load();
-    }
-  };
-
   const doTestEmail = async () => {
     setTestingEmail(true);
     setTestEmailResult(null);
@@ -505,34 +491,13 @@ export default function Settings() {
 
         <Divider sx={{ my: 3 }} />
 
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          Client notifications
-        </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          Emails go to the client(s) assigned to a job (Client Access tab), not to staff.
+          This is just the sending account. Whether a job's customer gets emailed —
+          and when — is controlled per job on that job's Overview tab, and always
+          requires pressing Send. Nothing here sends anything on its own.
         </Typography>
-        <Stack spacing={0.5}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={!!s.notify_on_status_change}
-                onChange={(e) => toggleNotify('notify_on_status_change', e.target.checked)}
-              />
-            }
-            label="Notify on job status changes"
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={!!s.notify_on_job_completion}
-                onChange={(e) => toggleNotify('notify_on_job_completion', e.target.checked)}
-              />
-            }
-            label="Notify when a job is completed"
-          />
-        </Stack>
 
-        <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 2 }}>
+        <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 1 }}>
           <Button
             variant="outlined"
             startIcon={<SendIcon />}

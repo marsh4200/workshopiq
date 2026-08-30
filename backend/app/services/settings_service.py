@@ -23,11 +23,6 @@ DEFAULTS = {
     "email_user": "",
     "email_password": "",
     "email_from": "",
-    # Administrator-only toggles: whether the client(s) assigned to a job get
-    # emailed on a general status change, and separately when a job reaches
-    # "Completed". Off by default until SMTP is configured and verified.
-    "notify_on_status_change": "0",
-    "notify_on_job_completion": "0",
     "whatsapp_country_code": "27",
     "github_repo_url": "https://github.com/marsh4200/workshopiq",
     "current_version": app_settings.APP_VERSION,

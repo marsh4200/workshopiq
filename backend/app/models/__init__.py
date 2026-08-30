@@ -97,6 +97,19 @@ class Job(Base):
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(40), default="Received", index=True)
 
+    # Per-job email-notification toggles (staff/admin, off by default). These
+    # only decide whether the "Send Email" buttons appear on the job — sending
+    # is always a manual click, never automatic. Emails go to this job's own
+    # `email` field above, from the SMTP account configured in Settings.
+    notify_on_status_change: Mapped[bool] = mapped_column(Boolean, default=False)
+    notify_on_job_completion: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_status_email_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_completion_email_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )

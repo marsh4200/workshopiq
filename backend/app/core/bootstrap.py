@@ -92,6 +92,11 @@ COLUMN_STATEMENTS = (
     "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS drawing_number VARCHAR(120)",
     "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS qcp_no VARCHAR(120)",
     "ALTER TABLE inspection_reports ADD COLUMN IF NOT EXISTS quantity VARCHAR(60)",
+    # Per-job manual email-notification toggles + last-sent timestamps.
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notify_on_status_change BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notify_on_job_completion BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS last_status_email_at TIMESTAMPTZ",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS last_completion_email_at TIMESTAMPTZ",
 )
 
 # One-off data fixes after the columns exist. Backfill is idempotent (the WHERE

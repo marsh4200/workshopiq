@@ -31,7 +31,6 @@ from app.api.deps import require_staff
 from app.core.config import settings
 from app.core.database import get_db
 from app.models import Inspection, Job, JobCheckin, TimelineEvent, User
-from app.services import email_service
 
 router = APIRouter(tags=["checkin"])
 
@@ -419,7 +418,6 @@ async def checkin_submit(
     )
 
     # A check-in means work has started — move the job to Machining.
-    status_changed: tuple[str, str] | None = None
     if job.status != "Machining":
         old_status = job.status
         job.status = "Machining"
@@ -431,10 +429,7 @@ async def checkin_submit(
                 actor_name=operator,
             )
         )
-        status_changed = (old_status, "Machining")
     await db.commit()
-    if status_changed:
-        await email_service.notify_job_status_changed(db, job, *status_changed)
 
     when = now.astimezone().strftime("%d %b %Y, %H:%M")
     body = f"""
