@@ -257,6 +257,8 @@ export const uploadLogo = async (file: File) => {
   fd.append('file', file);
   return (await api.post<AppSettings>('/settings/logo', fd)).data;
 };
+export const sendTestEmail = async (to?: string) =>
+  (await api.post<{ success: boolean; detail: string }>('/settings/test-email', { to })).data;
 
 // Backup & restore (admin)
 export const startBackup = async () =>

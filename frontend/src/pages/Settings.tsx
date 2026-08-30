@@ -30,6 +30,7 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import ConfirmationNumberOutlinedIcon from '@mui/icons-material/ConfirmationNumberOutlined';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
+import SendIcon from '@mui/icons-material/Send';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import SettingsBackupRestoreOutlinedIcon from '@mui/icons-material/SettingsBackupRestoreOutlined';
 import AndroidIcon from '@mui/icons-material/Android';
@@ -42,6 +43,7 @@ import {
   checkUpdates,
   applyUpdate,
   getUpdateStatus,
+  sendTestEmail,
   apiError,
 } from '../api/client';
 import { useSettings } from '../context/SettingsContext';
@@ -88,6 +90,14 @@ export default function Settings() {
     { severity: 'success' | 'info' | 'error'; text: string } | null
   >(null);
   const logoInput = useRef<HTMLInputElement>(null);
+  // SMTP password is write-only — the backend never echoes it back (only
+  // whether one is stored, via email_password_set). Left blank, the existing
+  // stored password is kept as-is.
+  const [emailPassword, setEmailPassword] = useState('');
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState<
+    { success: boolean; text: string } | null
+  >(null);
   // Hidden maintenance controls — revealed by tapping the faint "· · ·" at the
   // very bottom of the page (admins only). Auto-revealed while active so the
   // off switch can never be lost.
@@ -167,8 +177,12 @@ export default function Settings() {
         whatsapp_country_code: s.whatsapp_country_code,
         github_repo_url: s.github_repo_url,
       };
+      if (emailPassword.trim()) {
+        body.email_password = emailPassword.trim();
+      }
       const updated = await updateSettings(body);
       setS(updated);
+      setEmailPassword('');
       setMsg('Settings saved.');
       reload();
     } catch (e) {
@@ -199,6 +213,33 @@ export default function Settings() {
     } catch (e) {
       setError(apiError(e, 'Could not change the backup setting'));
       load();
+    }
+  };
+
+  const toggleNotify = async (
+    key: 'notify_on_status_change' | 'notify_on_job_completion',
+    value: boolean,
+  ) => {
+    setS((prev) => (prev ? { ...prev, [key]: value } : prev));
+    try {
+      const updated = await updateSettings({ [key]: value });
+      setS(updated);
+    } catch (e) {
+      setError(apiError(e, 'Could not change the notification setting'));
+      load();
+    }
+  };
+
+  const doTestEmail = async () => {
+    setTestingEmail(true);
+    setTestEmailResult(null);
+    try {
+      const result = await sendTestEmail();
+      setTestEmailResult({ success: result.success, text: result.detail });
+    } catch (e) {
+      setTestEmailResult({ success: false, text: apiError(e, 'Test email failed to send') });
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -405,13 +446,14 @@ export default function Settings() {
       <Section
         icon={<EmailOutlinedIcon />}
         title="Email (SMTP)"
-        subtitle="Optional. Used for outbound notifications."
+        subtitle="The account WorkshopIQ sends notification emails from. For Gmail, use a 16-character App Password (Google Account → Security → App passwords) — your normal password will be rejected."
       >
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <TextField
               label="SMTP Host"
               fullWidth
+              placeholder="smtp.gmail.com"
               value={s.email_host || ''}
               onChange={(e) => set('email_host', e.target.value)}
             />
@@ -420,6 +462,7 @@ export default function Settings() {
             <TextField
               label="SMTP Port"
               fullWidth
+              placeholder="587"
               value={s.email_port || ''}
               onChange={(e) => set('email_port', e.target.value)}
             />
@@ -428,19 +471,89 @@ export default function Settings() {
             <TextField
               label="SMTP Username"
               fullWidth
+              placeholder="you@example.com"
               value={s.email_user || ''}
               onChange={(e) => set('email_user', e.target.value)}
             />
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
+              label="SMTP Password"
+              type="password"
+              fullWidth
+              value={emailPassword}
+              onChange={(e) => setEmailPassword(e.target.value)}
+              placeholder={s.email_password_set ? '••••••••  (saved — leave blank to keep it)' : ''}
+              helperText={
+                s.email_password_set
+                  ? 'A password is already saved. Leave this blank unless you want to replace it.'
+                  : 'Not set yet.'
+              }
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
               label="From Address"
               fullWidth
+              placeholder="you@example.com"
               value={s.email_from || ''}
               onChange={(e) => set('email_from', e.target.value)}
+              helperText="Defaults to the SMTP username if left blank."
             />
           </Grid>
         </Grid>
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          Client notifications
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          Emails go to the client(s) assigned to a job (Client Access tab), not to staff.
+        </Typography>
+        <Stack spacing={0.5}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={!!s.notify_on_status_change}
+                onChange={(e) => toggleNotify('notify_on_status_change', e.target.checked)}
+              />
+            }
+            label="Notify on job status changes"
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={!!s.notify_on_job_completion}
+                onChange={(e) => toggleNotify('notify_on_job_completion', e.target.checked)}
+              />
+            }
+            label="Notify when a job is completed"
+          />
+        </Stack>
+
+        <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<SendIcon />}
+            onClick={doTestEmail}
+            disabled={testingEmail}
+          >
+            {testingEmail ? 'Sending…' : 'Send Test Email'}
+          </Button>
+          <Typography variant="caption" color="text.secondary">
+            Sends to your own account email. Save any SMTP changes first.
+          </Typography>
+        </Stack>
+        {testEmailResult && (
+          <Alert
+            severity={testEmailResult.success ? 'success' : 'error'}
+            sx={{ mt: 1.5 }}
+            onClose={() => setTestEmailResult(null)}
+          >
+            {testEmailResult.text}
+          </Alert>
+        )}
       </Section>
 
       <Section

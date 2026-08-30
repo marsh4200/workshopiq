@@ -11,8 +11,8 @@ from app.api.deps import get_current_user, require_admin
 from app.core.config import settings as app_settings
 from app.core.database import get_db
 from app.models import User
-from app.schemas import SettingsOut, SettingsUpdate
-from app.services import file_service
+from app.schemas import SettingsOut, SettingsUpdate, TestEmailRequest, TestEmailResult
+from app.services import email_service, file_service
 from app.services.settings_service import get_all_settings, get_setting, set_setting
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -29,6 +29,11 @@ async def _build_settings_out(db: AsyncSession) -> SettingsOut:
         email_port=s.get("email_port") or None,
         email_user=s.get("email_user") or None,
         email_from=s.get("email_from") or None,
+        email_password_set=bool(s.get("email_password")),
+        notify_on_status_change=str(s.get("notify_on_status_change", "0")).lower()
+        in ("1", "true", "yes", "on"),
+        notify_on_job_completion=str(s.get("notify_on_job_completion", "0")).lower()
+        in ("1", "true", "yes", "on"),
         whatsapp_country_code=s.get("whatsapp_country_code") or "27",
         github_repo_url=s.get("github_repo_url") or None,
         current_version=s.get("current_version", app_settings.APP_VERSION),
@@ -72,6 +77,40 @@ async def update_settings(
 
         bust_shutdown_cache(bool(fields["server_shutdown"]))
     return await _build_settings_out(db)
+
+
+@router.post("/test-email", response_model=TestEmailResult)
+async def test_email(
+    payload: TestEmailRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """Send a one-off test message using the currently saved SMTP settings.
+
+    Defaults to the requesting administrator's own account email so there's
+    no extra typing for the common case of "does this work at all".
+    """
+    to_addr = (payload.to or user.email or "").strip()
+    if not to_addr:
+        return TestEmailResult(
+            success=False,
+            detail="No recipient — set an email on your account or provide one.",
+        )
+    try:
+        await email_service.send_email(
+            db,
+            [to_addr],
+            subject="WorkshopIQ — test email",
+            text_body=(
+                "This is a test email from WorkshopIQ. If you're reading this, "
+                "your SMTP settings are working."
+            ),
+        )
+    except email_service.EmailNotConfigured as exc:
+        return TestEmailResult(success=False, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 — surface the SMTP error to the admin
+        return TestEmailResult(success=False, detail=f"Send failed: {exc}")
+    return TestEmailResult(success=True, detail=f"Test email sent to {to_addr}.")
 
 
 @router.post("/logo", response_model=SettingsOut)

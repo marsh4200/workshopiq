@@ -45,7 +45,7 @@ from app.schemas import (
     NoteOut,
     PhotoOut,
 )
-from app.services import file_service
+from app.services import email_service, file_service
 from app.services.certificate_service import build_job_certificate
 from app.services.job_pack_service import build_job_pack_zip
 from app.services.settings_service import get_setting, next_job_number
@@ -225,6 +225,7 @@ async def update_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    status_changed: tuple[str, str] | None = None
     if payload.status and payload.status != job.status:
         if payload.status not in JOB_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status")
@@ -242,6 +243,7 @@ async def update_job(
         await log_event(
             db, job.id, "status_change", f"Status changed: {old} → {payload.status}", user
         )
+        status_changed = (old, payload.status)
 
     for field in (
         "customer_name",
@@ -266,6 +268,8 @@ async def update_job(
         job.due_date = payload.due_date
 
     await db.commit()
+    if status_changed:
+        await email_service.notify_job_status_changed(db, job, *status_changed)
     detail = await load_job_detail(db, job_id)
     return serialize_detail(detail)
 

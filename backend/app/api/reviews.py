@@ -29,6 +29,7 @@ from app.schemas import (
     ReviewOut,
     ReviewSubmit,
 )
+from app.services import email_service
 
 router = APIRouter(tags=["reviews"])
 
@@ -77,6 +78,7 @@ async def request_review(
     review = JobReview(job_id=job_id, requested_by_id=user.id)
     db.add(review)
     await log_event(db, job_id, "review", "Customer review requested", user)
+    status_changed: tuple[str, str] | None = None
     if job.status != "Awaiting Customer Review":
         old = job.status
         job.status = "Awaiting Customer Review"
@@ -87,7 +89,10 @@ async def request_review(
             f"Status changed: {old} → Awaiting Customer Review",
             user,
         )
+        status_changed = (old, "Awaiting Customer Review")
     await db.commit()
+    if status_changed:
+        await email_service.notify_job_status_changed(db, job, *status_changed)
     await db.refresh(review)
     return review
 
@@ -155,6 +160,7 @@ async def skip_inspection_request_review(
         "Final inspection skipped — job sent to customer for review",
         user,
     )
+    status_changed: tuple[str, str] | None = None
     if job.status != "Awaiting Customer Review":
         old = job.status
         job.status = "Awaiting Customer Review"
@@ -165,7 +171,10 @@ async def skip_inspection_request_review(
             f"Status changed: {old} → Awaiting Customer Review",
             user,
         )
+        status_changed = (old, "Awaiting Customer Review")
     await db.commit()
+    if status_changed:
+        await email_service.notify_job_status_changed(db, job, *status_changed)
     await db.refresh(review)
     return review
 
@@ -216,13 +225,17 @@ async def submit_review(
     await log_event(
         db, job_id, "review", f"Customer review submitted ({payload.rating}/5)", user
     )
+    status_changed: tuple[str, str] | None = None
     if job.status != "Closed":
         old = job.status
         job.status = "Closed"
         await log_event(
             db, job_id, "status_change", f"Status changed: {old} → Closed", user
         )
+        status_changed = (old, "Closed")
     await db.commit()
+    if status_changed:
+        await email_service.notify_job_status_changed(db, job, *status_changed)
     await db.refresh(review)
     return review
 
