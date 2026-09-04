@@ -505,7 +505,9 @@ async def upload_photos(
     saved: list[Photo] = []
     for upload in files:
         try:
-            stored, original = await file_service.save_upload(upload, job_id)
+            stored, original = await file_service.save_upload(
+                upload, job_id, compact_images=True
+            )
         except ValueError as exc:
             raise HTTPException(status_code=413, detail=str(exc))
         photo = Photo(
