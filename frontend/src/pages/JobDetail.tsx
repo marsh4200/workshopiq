@@ -15,11 +15,14 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControl,
   FormControlLabel,
   Grid,
   IconButton,
+  InputLabel,
   MenuItem,
   Rating,
+  Select,
   Stack,
   Switch,
   Tab,
@@ -31,6 +34,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -91,6 +95,8 @@ import {
   rejectClosure,
   logWhatsapp,
   sendJobEmail,
+  addJobEmailContact,
+  deleteJobEmailContact,
   downloadCertificate,
   downloadJobPack,
   apiError,
@@ -151,13 +157,22 @@ function whatsappMessage(job: JobDetailT, company: string, origin: string): stri
   return `${head} ${line}\nTrack progress: ${origin}`;
 }
 
-/** Draft a status-aware notification email — staff review/edit this before sending. */
+/**
+ * Draft a status-aware notification email — staff review/edit this before
+ * sending. `recipientName` is the saved name of whichever email contact was
+ * picked on the job (falling back to the job's own contact/customer name if
+ * that contact has none), so the greeting is always "Hi <that person>,"
+ * rather than a guess. `loginUrl` is appended so the customer can log in to
+ * the client portal and track the job themselves.
+ */
 function draftEmail(
   kind: 'status' | 'completion',
   job: JobDetailT,
   company: string,
+  recipientName: string,
+  loginUrl: string,
 ): { subject: string; body: string } {
-  const who = job.contact_person || job.customer_name || 'there';
+  const who = recipientName || job.contact_person || job.customer_name || 'there';
   let line: string;
   if (kind === 'completion') {
     line = `Good news — job ${job.job_number} is complete and ready for collection.`;
@@ -189,7 +204,7 @@ function draftEmail(
     kind === 'completion'
       ? `${job.job_number} — your job is complete`
       : `${job.job_number} — status update: ${job.status}`;
-  const body = `Hi ${who},\n\nThis is ${company}. ${line}\n\nIf you have any questions, please get in touch.\n\nThanks,\n${company}`;
+  const body = `Hi ${who},\n\nThis is ${company}. ${line}\n\nIf you have any questions, please get in touch.\n\nLog in to track your job: ${loginUrl}\n\nThanks,\n${company}`;
   return { subject, body };
 }
 
@@ -495,30 +510,98 @@ function OverviewTab({
       .catch(() => undefined);
   };
 
+  // Email contacts: a job can have several named addresses saved against it
+  // (the buyer, a site foreman, ...). These are what the Send Email dialog
+  // below picks a recipient from — not the single legacy "Email" field on
+  // the job, which stays around just as a general contact detail.
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [addingContact, setAddingContact] = useState(false);
+  const [contactError, setContactError] = useState('');
+
+  const addContact = async () => {
+    const name = contactName.trim();
+    const email = contactEmail.trim();
+    if (!name || !email) return;
+    setAddingContact(true);
+    setContactError('');
+    try {
+      await addJobEmailContact(job.id, name, email);
+      setContactName('');
+      setContactEmail('');
+      await onUpdate();
+    } catch (e) {
+      setContactError(apiError(e, 'Could not save that email contact'));
+    } finally {
+      setAddingContact(false);
+    }
+  };
+
+  const removeContact = async (contactId: number) => {
+    try {
+      await deleteJobEmailContact(job.id, contactId);
+      await onUpdate();
+    } catch (e) {
+      setError(apiError(e, 'Could not remove that email contact'));
+    }
+  };
+
   // Email notifications: fully manual — the toggles below only decide whether
-  // the Send buttons show up. Clicking one opens a preview/edit dialog; the
-  // email only actually goes out once staff presses Send in that dialog.
+  // the Send buttons show up. Clicking one opens a dialog that first asks
+  // which saved contact it's going to, then drafts a preview/edit-able
+  // subject and body greeting that person by their saved name; the email
+  // only actually goes out once staff presses Send.
   const [emailDialog, setEmailDialog] = useState<'status' | 'completion' | null>(null);
+  const [emailContactId, setEmailContactId] = useState<number | ''>('');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailDialogError, setEmailDialogError] = useState('');
 
-  const openEmailDialog = (kind: 'status' | 'completion') => {
+  const draftFor = (kind: 'status' | 'completion', recipientName: string) => {
     const company = settings?.company_name || 'WorkshopIQ';
-    const { subject, body } = draftEmail(kind, job, company);
-    setEmailSubject(subject);
-    setEmailBody(body);
+    return draftEmail(kind, job, company, recipientName, `${window.location.origin}/login`);
+  };
+
+  const openEmailDialog = (kind: 'status' | 'completion') => {
     setEmailDialogError('');
     setEmailDialog(kind);
+    // Only one contact on file? Nothing to actually choose — pick it and
+    // draft straight away. More than one: leave it unselected so staff have
+    // to pick who this is going to before a subject/body even appears.
+    if (job.email_contacts.length === 1) {
+      const only = job.email_contacts[0];
+      setEmailContactId(only.id);
+      const { subject, body } = draftFor(kind, only.name);
+      setEmailSubject(subject);
+      setEmailBody(body);
+    } else {
+      setEmailContactId('');
+      setEmailSubject('');
+      setEmailBody('');
+    }
+  };
+
+  const selectEmailContact = (contactId: number) => {
+    if (!emailDialog) return;
+    setEmailContactId(contactId);
+    const contact = job.email_contacts.find((c) => c.id === contactId);
+    const { subject, body } = draftFor(emailDialog, contact?.name || '');
+    setEmailSubject(subject);
+    setEmailBody(body);
   };
 
   const sendEmailNow = async () => {
-    if (!emailDialog) return;
+    if (!emailDialog || !emailContactId) return;
     setSendingEmail(true);
     setEmailDialogError('');
     try {
-      await sendJobEmail(job.id, { kind: emailDialog, subject: emailSubject, body: emailBody });
+      await sendJobEmail(job.id, {
+        kind: emailDialog,
+        contact_id: emailContactId,
+        subject: emailSubject,
+        body: emailBody,
+      });
       await onUpdate();
       setEmailDialog(null);
     } catch (e) {
@@ -771,6 +854,80 @@ function OverviewTab({
                 <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }}>
                   <EmailOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                   <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                    EMAIL CONTACTS
+                  </Typography>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                  Save each person who should be reachable by email on this job — the
+                  Send Email button below asks which one to use, and greets them by the
+                  name saved here.
+                </Typography>
+                {job.email_contacts.length > 0 && (
+                  <Stack spacing={0.5} sx={{ mb: 1 }}>
+                    {job.email_contacts.map((c) => (
+                      <Stack
+                        key={c.id}
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        sx={{
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1,
+                          bgcolor: 'action.hover',
+                        }}
+                      >
+                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={600} noWrap>
+                            {c.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                            {c.email}
+                          </Typography>
+                        </Box>
+                        <Tooltip title="Remove">
+                          <IconButton size="small" onClick={() => removeContact(c.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    ))}
+                  </Stack>
+                )}
+                <Stack direction="row" spacing={1} sx={{ mb: 0.5 }}>
+                  <TextField
+                    size="small"
+                    label="Name"
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    sx={{ flex: 1 }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Email"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    sx={{ flex: 1 }}
+                  />
+                </Stack>
+                <Button
+                  fullWidth
+                  size="small"
+                  startIcon={<AddIcon />}
+                  disabled={addingContact || !contactName.trim() || !contactEmail.trim()}
+                  onClick={addContact}
+                >
+                  {addingContact ? 'Adding…' : 'Add Email Contact'}
+                </Button>
+                {contactError && (
+                  <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                    {contactError}
+                  </Typography>
+                )}
+                <Divider sx={{ my: 1.5 }} />
+                <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }}>
+                  <SendIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
                     EMAIL NOTIFICATIONS
                   </Typography>
                 </Stack>
@@ -802,12 +959,12 @@ function OverviewTab({
                     label={<Typography variant="body2">Completion email</Typography>}
                   />
                 </Stack>
-                {!job.email && (
+                {job.email_contacts.length === 0 && (
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                    Add a customer email above to enable sending.
+                    Add an email contact above to enable sending.
                   </Typography>
                 )}
-                {job.email && job.notify_on_status_change && (
+                {job.email_contacts.length > 0 && job.notify_on_status_change && (
                   <Button
                     fullWidth
                     size="small"
@@ -824,7 +981,7 @@ function OverviewTab({
                     Last sent {fmtDate(job.last_status_email_at)}
                   </Typography>
                 )}
-                {job.email && job.notify_on_job_completion && job.status === 'Completed' && (
+                {job.email_contacts.length > 0 && job.notify_on_job_completion && job.status === 'Completed' && (
                   <Button
                     fullWidth
                     size="small"
@@ -927,24 +1084,43 @@ function OverviewTab({
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Sending to <strong>{job.email}</strong>. Review or edit before sending — nothing
+            Pick who this goes to. Review or edit the message before sending — nothing
             goes out until you press Send below.
           </Typography>
           <Stack spacing={2}>
-            <TextField
-              label="Subject"
-              fullWidth
-              value={emailSubject}
-              onChange={(e) => setEmailSubject(e.target.value)}
-            />
-            <TextField
-              label="Message"
-              fullWidth
-              multiline
-              minRows={6}
-              value={emailBody}
-              onChange={(e) => setEmailBody(e.target.value)}
-            />
+            <FormControl fullWidth size="small">
+              <InputLabel id="email-recipient-label">Send to</InputLabel>
+              <Select
+                labelId="email-recipient-label"
+                label="Send to"
+                value={emailContactId}
+                onChange={(e) => selectEmailContact(Number(e.target.value))}
+              >
+                {job.email_contacts.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.name} &lt;{c.email}&gt;
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {emailContactId && (
+              <>
+                <TextField
+                  label="Subject"
+                  fullWidth
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                />
+                <TextField
+                  label="Message"
+                  fullWidth
+                  multiline
+                  minRows={6}
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                />
+              </>
+            )}
           </Stack>
           {emailDialogError && (
             <Alert severity="error" sx={{ mt: 2 }}>
@@ -959,7 +1135,7 @@ function OverviewTab({
           <Button
             variant="contained"
             startIcon={<SendIcon />}
-            disabled={sendingEmail || !emailSubject.trim() || !emailBody.trim()}
+            disabled={sendingEmail || !emailContactId || !emailSubject.trim() || !emailBody.trim()}
             onClick={sendEmailNow}
           >
             {sendingEmail ? 'Sending…' : 'Send'}

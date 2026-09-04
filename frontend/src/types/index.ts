@@ -93,6 +93,12 @@ export interface JobListItem {
   eq_number?: string | null;
 }
 
+export interface JobEmailContact {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export interface JobCostItem {
   id: number;
   job_id: number;
@@ -126,6 +132,7 @@ export interface JobDetail extends JobListItem {
   notify_on_job_completion: boolean;
   last_status_email_at?: string | null;
   last_completion_email_at?: string | null;
+  email_contacts: JobEmailContact[];
 }
 
 export interface CheckinStatus {

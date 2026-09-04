@@ -26,6 +26,7 @@ from app.models import (
     InspectionTemplate,
     Job,
     JobCheckin,
+    JobEmailContact,
     NCR,
     Note,
     Photo,
@@ -40,6 +41,7 @@ from app.schemas import (
     InspectionUpdate,
     JobCreate,
     JobDetailOut,
+    JobEmailContactIn,
     JobEmailSend,
     JobListOut,
     JobUpdate,
@@ -114,6 +116,7 @@ async def load_job_detail(db: AsyncSession, job_id: int) -> Job | None:
                 FinalInspection.attempts_log
             ),
             selectinload(Job.checkins),
+            selectinload(Job.email_contacts),
         )
         .where(Job.id == job_id)
     )
@@ -296,6 +299,50 @@ async def log_whatsapp(
     return serialize_detail(detail)
 
 
+@router.post("/{job_id}/email-contacts", response_model=JobDetailOut, status_code=201)
+async def add_job_email_contact(
+    job_id: int,
+    payload: JobEmailContactIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+):
+    """Save a named email address against a job.
+
+    A job can carry several of these — e.g. the buyer and a site foreman —
+    so the Send Status/Completion Email dialog has someone to pick from and
+    knows what name to greet them by.
+    """
+    job = await db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    name = payload.name.strip()
+    email = payload.email.strip()
+    if not name or not email:
+        raise HTTPException(status_code=400, detail="Name and email are required")
+    if "@" not in email:
+        raise HTTPException(status_code=400, detail="That doesn't look like a valid email address")
+    db.add(JobEmailContact(job_id=job.id, name=name, email=email))
+    await db.commit()
+    detail = await load_job_detail(db, job_id)
+    return serialize_detail(detail)
+
+
+@router.delete("/{job_id}/email-contacts/{contact_id}", response_model=JobDetailOut)
+async def delete_job_email_contact(
+    job_id: int,
+    contact_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+):
+    contact = await db.get(JobEmailContact, contact_id)
+    if not contact or contact.job_id != job_id:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    await db.delete(contact)
+    await db.commit()
+    detail = await load_job_detail(db, job_id)
+    return serialize_detail(detail)
+
+
 @router.post("/{job_id}/send-email", response_model=JobDetailOut)
 async def send_job_email(
     job_id: int,
@@ -303,19 +350,25 @@ async def send_job_email(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ):
-    """Manually send a notification email to the job's own contact email.
+    """Manually send a notification email to one of the job's saved contacts.
 
     Nothing in WorkshopIQ triggers this on its own — a staff/admin member
-    opens the job, reviews the drafted subject/body (composed client-side,
-    the same way the WhatsApp message is), and presses Send. Unlike the
-    WhatsApp button, which just opens a wa.me link, this one actually sends
-    via the SMTP account configured in Settings.
+    opens the job, picks who on the job's contact list it's going to,
+    reviews the drafted subject/body (composed client-side, the same way the
+    WhatsApp message is, greeting whoever was picked by their saved name),
+    and presses Send. Unlike the WhatsApp button, which just opens a wa.me
+    link, this one actually sends via the SMTP account configured in
+    Settings.
     """
     job = await db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if not job.email:
-        raise HTTPException(status_code=400, detail="This job has no customer email on file.")
+
+    contact = await db.get(JobEmailContact, payload.contact_id)
+    if not contact or contact.job_id != job.id:
+        raise HTTPException(
+            status_code=400, detail="Pick a saved email contact for this job first."
+        )
 
     if payload.kind == "completion":
         if not job.notify_on_job_completion:
@@ -338,7 +391,7 @@ async def send_job_email(
         raise HTTPException(status_code=400, detail="Subject and body are required")
 
     try:
-        await email_service.send_email(db, [job.email], subject, body)
+        await email_service.send_email(db, [contact.email], subject, body)
     except email_service.EmailNotConfigured as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 — surface the SMTP failure to staff
@@ -347,10 +400,10 @@ async def send_job_email(
     now = datetime.now(timezone.utc)
     if payload.kind == "completion":
         job.last_completion_email_at = now
-        log_desc = f"Completion email sent to {job.email}"
+        log_desc = f"Completion email sent to {contact.name} <{contact.email}>"
     else:
         job.last_status_email_at = now
-        log_desc = f"Status update email sent to {job.email}"
+        log_desc = f"Status update email sent to {contact.name} <{contact.email}>"
     await log_event(db, job.id, "email", log_desc, user)
     await db.commit()
     detail = await load_job_detail(db, job_id)

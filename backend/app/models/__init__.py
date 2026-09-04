@@ -154,6 +154,34 @@ class Job(Base):
     ncrs: Mapped[list["NCR"]] = relationship(
         back_populates="job", passive_deletes=True
     )
+    email_contacts: Mapped[list["JobEmailContact"]] = relationship(
+        back_populates="job",
+        cascade="all, delete-orphan",
+        order_by="JobEmailContact.created_at",
+    )
+
+
+class JobEmailContact(Base):
+    """A named email address saved against a job.
+
+    A job can have several of these — the buyer, a site foreman, the person
+    who actually reads email — each with its own display name. The manual
+    Send Status/Completion Email flow (see ``app/api/jobs.py``) requires
+    picking one of these before it will send, and greets that person by the
+    name saved here rather than guessing from ``Job.contact_person``.
+    """
+
+    __tablename__ = "job_email_contacts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    job: Mapped["Job"] = relationship(back_populates="email_contacts")
 
 
 class ClientJobAccess(Base):

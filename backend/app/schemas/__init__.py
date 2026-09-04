@@ -304,9 +304,24 @@ class JobUpdate(BaseModel):
     notify_on_job_completion: Optional[bool] = None
 
 
+class JobEmailContactIn(BaseModel):
+    """A named email address to save against a job."""
+    name: str
+    email: str
+
+
+class JobEmailContactOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    email: str
+
+
 class JobEmailSend(BaseModel):
-    """Manual send — staff composed (or accepted) this subject/body themselves."""
+    """Manual send — staff composed (or accepted) this subject/body themselves,
+    and picked which of the job's saved email contacts it goes to."""
     kind: str  # "status" | "completion"
+    contact_id: int
     subject: str
     body: str
 
@@ -462,6 +477,7 @@ class JobDetailOut(JobListOut):
     notify_on_job_completion: bool = False
     last_status_email_at: Optional[datetime] = None
     last_completion_email_at: Optional[datetime] = None
+    email_contacts: list[JobEmailContactOut] = []
 
 
 class AssignClientsRequest(BaseModel):

@@ -160,9 +160,15 @@ export const addNote = async (jobId: number, note_type: string, body: string) =>
 export const logWhatsapp = async (jobId: number) =>
   (await api.post<JobDetail>(`/jobs/${jobId}/whatsapp-log`, {})).data;
 
+export const addJobEmailContact = async (jobId: number, name: string, email: string) =>
+  (await api.post<JobDetail>(`/jobs/${jobId}/email-contacts`, { name, email })).data;
+
+export const deleteJobEmailContact = async (jobId: number, contactId: number) =>
+  (await api.delete<JobDetail>(`/jobs/${jobId}/email-contacts/${contactId}`)).data;
+
 export const sendJobEmail = async (
   jobId: number,
-  body: { kind: 'status' | 'completion'; subject: string; body: string },
+  body: { kind: 'status' | 'completion'; contact_id: number; subject: string; body: string },
 ) => (await api.post<JobDetail>(`/jobs/${jobId}/send-email`, body)).data;
 
 // Photos & documents

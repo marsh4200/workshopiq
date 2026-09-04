@@ -104,6 +104,26 @@ COLUMN_STATEMENTS = (
 BACKFILL_STATEMENTS = (
     # Inspections completed before the result column existed were all passes.
     "UPDATE final_inspections SET result = 'passed' WHERE completed = TRUE AND result IS NULL",
+    # job_email_contacts is a brand-new table (created by init_models()'s
+    # create_all, which runs before this) that replaces the old single
+    # Job.email field as the source of who gets notification emails. Give
+    # every job that already had an email on file a starting contact so
+    # existing jobs aren't left with nothing to pick from the first time
+    # someone opens the new Send Email dialog. The NOT EXISTS guard makes
+    # this safe to run on every startup.
+    """
+    INSERT INTO job_email_contacts (job_id, name, email, created_at)
+    SELECT jobs.id,
+           COALESCE(NULLIF(TRIM(jobs.contact_person), ''), NULLIF(TRIM(jobs.customer_name), ''), 'Contact'),
+           jobs.email,
+           NOW()
+    FROM jobs
+    WHERE jobs.email IS NOT NULL AND TRIM(jobs.email) <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM job_email_contacts jec
+        WHERE jec.job_id = jobs.id AND jec.email = jobs.email
+      )
+    """,
 )
 
 
