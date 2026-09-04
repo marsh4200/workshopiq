@@ -131,7 +131,12 @@ def _header_grid(h: dict, st) -> Table:
     """Label/value grid matching the sheet's field pairing exactly.
 
     Left labels : CERTIFICATE NUMBER, CUSTOMER, JOB DESC, DRAWING NUMBER, QUANTITY
-    Right labels:        (none),       DATE,    JOB NO,     QCP NO,        EVE JOB
+    Right labels:        (none),       DATE,    JOB NO,     QCP NO,       (none)
+
+    The QUANTITY row's right-hand pair used to carry EVE JOB — that field is no
+    longer shown on the report (kept in ``h``/the DB for anything else that
+    still wants it), so its cells are spanned into the QUANTITY value like the
+    CERTIFICATE NUMBER row above, instead of leaving a blank label/box behind.
     """
     def L(t):
         return Paragraph(t, st["label"])
@@ -144,7 +149,7 @@ def _header_grid(h: dict, st) -> Table:
         [L("CUSTOMER"), V(h.get("customer", "")), L("DATE"), V(h.get("date", ""))],
         [L("JOB DESC"), V(h.get("job_desc", "")), L("JOB NO"), V(h.get("job_no", ""))],
         [L("DRAWING NUMBER"), V(h.get("drawing_number", "")), L("QCP NO"), V(h.get("qcp_no", ""))],
-        [L("QUANTITY"), V(h.get("quantity", "")), L("EVE JOB"), V(h.get("eve_job", ""))],
+        [L("QUANTITY"), V(h.get("quantity", "")), L(""), V("")],
     ]
     # No explicit rowHeights here: a fixed height forces the row to that size
     # regardless of content, so a long CUSTOMER or JOB DESC value that wraps to
@@ -158,6 +163,7 @@ def _header_grid(h: dict, st) -> Table:
         ("BACKGROUND", (0, 0), (0, -1), LIGHT),
         ("BACKGROUND", (2, 0), (2, -1), LIGHT),
         ("SPAN", (1, 0), (3, 0)),          # certificate value spans the full right side
+        ("SPAN", (1, 4), (3, 4)),          # quantity value spans the full right side (EVE JOB removed)
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),

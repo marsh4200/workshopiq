@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Autocomplete,
   Box,
   Button,
   Card,
+  CardActionArea,
+  CardContent,
   Chip,
   CircularProgress,
   Collapse,
@@ -11,6 +13,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Grid,
   IconButton,
   Snackbar,
   Stack,
@@ -35,6 +38,10 @@ import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import PendingActionsOutlinedIcon from '@mui/icons-material/PendingActionsOutlined';
+import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined';
 import { useNavigate } from 'react-router-dom';
 import {
   apiError,
@@ -86,6 +93,58 @@ function StatusChip({ r }: { r: InspectionReportItem }) {
         />
       )}
     </Stack>
+  );
+}
+
+// Landing tile for the Open/Submitted split below — same look as the Settings
+// page tiles, so the "pick a category first" pattern feels consistent across
+// the app.
+function ViewTile({
+  icon,
+  title,
+  subtitle,
+  badge,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  badge?: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <Grid item xs={12} sm={6}>
+      <Card variant="outlined" sx={{ height: '100%' }}>
+        <CardActionArea onClick={onClick} sx={{ height: '100%', p: 0.5 }}>
+          <CardContent sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.75 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                placeItems: 'center',
+                width: 44,
+                height: 44,
+                borderRadius: 2,
+                flexShrink: 0,
+                bgcolor: 'action.hover',
+                color: 'primary.main',
+              }}
+            >
+              {icon}
+            </Box>
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography fontWeight={700}>{title}</Typography>
+                {badge}
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                {subtitle}
+              </Typography>
+            </Box>
+            <ChevronRightIcon sx={{ color: 'text.disabled', flexShrink: 0, mt: 0.5 }} />
+          </CardContent>
+        </CardActionArea>
+      </Card>
+    </Grid>
   );
 }
 
@@ -176,14 +235,20 @@ export default function InspectionReports() {
   };
 
   const pendingCount = useMemo(() => reports.filter((r) => !r.submitted).length, [reports]);
+  const filedCount = reports.length - pendingCount;
+
+  // Landing view: pick "open" (not yet filled in) or "closed" (submitted)
+  // before seeing any reports — same click-a-tile-first pattern as Settings.
+  const [view, setView] = useState<'open' | 'closed' | null>(null);
 
   // Which customer folders are open. Keyed by the normalised customer name —
   // same folder-per-customer pattern as the Jobs page.
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const groups = useMemo<CustomerGroup[]>(() => {
+    const scoped = reports.filter((r) => (view === 'closed' ? r.submitted : !r.submitted));
     const map = new Map<string, CustomerGroup>();
-    for (const r of reports) {
+    for (const r of scoped) {
       const name = (r.customer_name || 'Unassigned').trim() || 'Unassigned';
       const key = name.toLowerCase();
       const g = map.get(key);
@@ -194,7 +259,7 @@ export default function InspectionReports() {
     list.forEach((g) => g.reports.sort(byRecency));
     list.sort((a, b) => a.name.localeCompare(b.name));
     return list;
-  }, [reports]);
+  }, [reports, view]);
 
   // A single customer opens by default; the rest start collapsed.
   const isOpen = (key: string) => open[key] ?? groups.length === 1;
@@ -338,7 +403,13 @@ export default function InspectionReports() {
         }
       />
 
-      {!loading && groups.length > 0 && (
+      {view && (
+        <Button startIcon={<ArrowBackIcon />} onClick={() => setView(null)} sx={{ mb: 2 }}>
+          Back to Inspection Reports
+        </Button>
+      )}
+
+      {!loading && view && groups.length > 0 && (
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           alignItems={{ xs: 'stretch', sm: 'center' }}
@@ -346,11 +417,9 @@ export default function InspectionReports() {
           sx={{ mb: 1.5 }}
         >
           <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, alignSelf: 'center' }}>
-            {groups.length} customer{groups.length === 1 ? '' : 's'} · {reports.length} report
-            {reports.length === 1 ? '' : 's'}
-            {pendingCount > 0
-              ? ` · ${pendingCount} pending · ${reports.length - pendingCount} filed`
-              : ''}
+            {groups.length} customer{groups.length === 1 ? '' : 's'} ·{' '}
+            {view === 'open' ? pendingCount : filedCount} {view === 'open' ? 'open' : 'submitted'} report
+            {(view === 'open' ? pendingCount : filedCount) === 1 ? '' : 's'}
           </Typography>
           <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-end', sm: 'flex-start' }}>
             <Button size="small" startIcon={<UnfoldMoreIcon />} onClick={() => setAll(true)}>
@@ -367,12 +436,52 @@ export default function InspectionReports() {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress />
         </Box>
-      ) : reports.length === 0 ? (
+      ) : !view ? (
+        reports.length === 0 ? (
+          <Card sx={{ p: 2 }}>
+            <EmptyState
+              icon={<FactCheckIcon sx={{ fontSize: 44, opacity: 0.5 }} />}
+              title="No inspection reports yet"
+              subtitle="Generate a QR code for a job to get started."
+            />
+          </Card>
+        ) : (
+          <Grid container spacing={2}>
+            <ViewTile
+              icon={<PendingActionsOutlinedIcon />}
+              title="Open Inspection Reports"
+              subtitle={
+                pendingCount > 0 ? `${pendingCount} not yet filled in` : 'None waiting — all caught up'
+              }
+              badge={
+                pendingCount > 0 ? (
+                  <Chip
+                    size="small"
+                    label={pendingCount}
+                    sx={{ bgcolor: '#f59e0b1f', color: '#f59e0b', fontWeight: 700 }}
+                  />
+                ) : undefined
+              }
+              onClick={() => setView('open')}
+            />
+            <ViewTile
+              icon={<TaskAltOutlinedIcon />}
+              title="Submitted Inspection Reports"
+              subtitle={filedCount > 0 ? `${filedCount} filed` : 'None filed yet'}
+              onClick={() => setView('closed')}
+            />
+          </Grid>
+        )
+      ) : groups.length === 0 ? (
         <Card sx={{ p: 2 }}>
           <EmptyState
             icon={<FactCheckIcon sx={{ fontSize: 44, opacity: 0.5 }} />}
-            title="No inspection reports yet"
-            subtitle="Generate a QR code for a job to get started."
+            title={view === 'open' ? 'No open reports' : 'No submitted reports yet'}
+            subtitle={
+              view === 'open'
+                ? 'Every generated report has been filled in and filed.'
+                : 'Reports show up here once they’ve been filled in and filed.'
+            }
           />
         </Card>
       ) : (

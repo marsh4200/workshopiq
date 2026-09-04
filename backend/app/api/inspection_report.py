@@ -719,17 +719,17 @@ def _form_html(token: str, job: Job, h: dict) -> str:
       </tr>
       <tr>
         <td class="lbl">DRAWING NUMBER</td>
-        <td>{_ta("drawing_number", h['drawing_number'], readonly=True)}</td>
-        <td class="lbl">EVE JOB</td>
-        <td>{_ta("eve_job", h['eve_job'], readonly=True)}</td>
+        <td colspan="3">{_ta("drawing_number", h['drawing_number'], readonly=True)}</td>
       </tr>
       <tr>
         <td class="lbl">QUANTITY</td>
-        <td>{_ta("quantity", h['quantity'], readonly=True)}</td>
-        <td class="lbl"></td>
-        <td><input disabled/></td>
+        <td colspan="3">{_ta("quantity", h['quantity'], readonly=True)}</td>
       </tr>
     </table>
+    <!-- EVE JOB is no longer shown on the report itself (was paired with
+         DRAWING NUMBER above), but it's still posted with the form exactly as
+         before so nothing downstream that reads it breaks. -->
+    <input type="hidden" name="eve_job" value="{_hv(h['eve_job'])}"/>
 
     <div class="hscroll">
       <table class="meas">
